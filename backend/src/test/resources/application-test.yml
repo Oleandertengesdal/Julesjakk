@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: ${TEST_DATABASE_URL:jdbc:postgresql://localhost:5432/sjakkportal_test}
+    username: ${TEST_DATABASE_USERNAME:sjakkportal}
+    password: ${TEST_DATABASE_PASSWORD:sjakkportal}
+  flyway:
+    clean-disabled: false
+
+sjakkportal:
+  jwt:
+    # Test-only signing key; production reads SJAKKPORTAL_JWT_SECRET.
+    secret: dGVzdC1vbmx5LXNpZ25pbmcta2V5LWZvci1zamFra3BvcnRhbC10ZXN0cy0wMTIzNDU2Nzg5
+  cors:
+    allowed-origins: http://localhost:5173
+  rate-limit:
+    game-submission:
+      capacity: 10000

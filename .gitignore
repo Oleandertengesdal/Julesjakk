@@ -1,0 +1,19 @@
+# Build output
+backend/build/
+backend/.gradle/
+frontend/node_modules/
+frontend/dist/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Transfer file used when syncing from the build workspace
+.sjakkportal-sync.tar
