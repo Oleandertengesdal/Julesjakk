@@ -60,11 +60,11 @@ class GameApiTest extends ApiIntegrationTest {
     }
 
     private int rating(long user) {
-        return jdbc.queryForObject("SELECT rating FROM app_user WHERE id = ?", Integer.class, user);
+        return rating(user, "CLASSICAL");
     }
 
     private int ratedGames(long user) {
-        return jdbc.queryForObject("SELECT rated_games FROM app_user WHERE id = ?", Integer.class, user);
+        return ratedGames(user, "CLASSICAL");
     }
 
     private int count(String table) {
@@ -75,10 +75,11 @@ class GameApiTest extends ApiIntegrationTest {
     class Registering {
 
         @Test
-        void resultOnlyGameUpdatesBothRatings() throws Exception {
-            MvcResult result = submit(kariToken, game(kari, ola, "WHITE_WIN"));
+        void gameRegisteredByAnAdminIsFinalAndUpdatesBothRatings() throws Exception {
+            MvcResult result = submit(adminToken, game(kari, ola, "WHITE_WIN"));
 
             assertThat(result.getResponse().getStatus()).isEqualTo(201);
+            assertThat(body(result).get("status").asText()).isEqualTo("FINISHED");
             // Both players are provisional (K = 40) and equal: 40 * 0.5 = 20.
             assertThat(body(result).get("whiteRatingDelta").asInt()).isEqualTo(20);
             assertThat(body(result).get("blackRatingDelta").asInt()).isEqualTo(-20);
@@ -174,7 +175,7 @@ class GameApiTest extends ApiIntegrationTest {
         void unratedGameLeavesRatingsAlone() throws Exception {
             Map<String, Object> body = game(kari, ola, "WHITE_WIN");
             body.put("rated", false);
-            MvcResult result = submit(kariToken, body);
+            MvcResult result = submit(adminToken, body);
 
             assertThat(result.getResponse().getStatus()).isEqualTo(201);
             assertThat(rating(kari)).isEqualTo(1200);
@@ -273,8 +274,7 @@ class GameApiTest extends ApiIntegrationTest {
             List<Callable<Integer>> tasks = new ArrayList<>();
             for (int i = 0; i < 20; i++) {
                 Map<String, Object> body = i % 2 == 0 ? game(kari, ola, "WHITE_WIN") : game(ola, kari, "WHITE_WIN");
-                String token = i % 2 == 0 ? kariToken : olaToken;
-                tasks.add(() -> submit(token, body).getResponse().getStatus());
+                tasks.add(() -> submit(adminToken, body).getResponse().getStatus());
             }
             assertThat(runConcurrently(tasks)).containsOnly(201);
             assertThat(ratedGames(kari)).isEqualTo(20);
@@ -287,7 +287,7 @@ class GameApiTest extends ApiIntegrationTest {
             Map<String, Object> body = game(kari, ola, "WHITE_WIN");
             List<Callable<MvcResult>> tasks = new ArrayList<>();
             for (int i = 0; i < 6; i++) {
-                tasks.add(() -> mvc.perform(as(jsonPost("/api/games", body), kariToken).header("Idempotency-Key", key)).andReturn());
+                tasks.add(() -> mvc.perform(as(jsonPost("/api/games", body), adminToken).header("Idempotency-Key", key)).andReturn());
             }
             List<MvcResult> responses = runConcurrently(tasks);
 
@@ -324,7 +324,7 @@ class GameApiTest extends ApiIntegrationTest {
         private long finishedGameWithMoves() throws Exception {
             Map<String, Object> body = game(kari, ola, "WHITE_WIN");
             body.put("pgn", SCHOLARS_MATE);
-            return body(submit(kariToken, body)).get("id").asLong();
+            return body(submit(adminToken, body)).get("id").asLong();
         }
 
         private Map<String, Object> analysis(int plies) {
@@ -413,7 +413,7 @@ class GameApiTest extends ApiIntegrationTest {
 
         @Test
         void gameWithoutMovesCannotBeAnalysed() throws Exception {
-            long id = body(submit(kariToken, game(kari, ola, "DRAW"))).get("id").asLong();
+            long id = body(submit(adminToken, game(kari, ola, "DRAW"))).get("id").asLong();
             assertThat(body(save(kariToken, id, analysis(7))).get("code").asText())
                     .isEqualTo(ErrorCode.ANALYSIS_GAME_NOT_FINISHED.code());
         }

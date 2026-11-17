@@ -53,7 +53,11 @@ class LiveGameApiTest extends ApiIntegrationTest {
     }
 
     private int rating(long user) {
-        return jdbc.queryForObject("SELECT rating FROM app_user WHERE id = ?", Integer.class, user);
+        return rating(user, "CLASSICAL");
+    }
+
+    private MvcResult confirm(String token, long game) throws Exception {
+        return mvc.perform(as(jsonPost("/api/games/" + game + "/confirm", Map.of()), token)).andReturn();
     }
 
     @Test
@@ -146,7 +150,7 @@ class LiveGameApiTest extends ApiIntegrationTest {
     }
 
     @Test
-    void checkmateFinishesTheGameAndUpdatesRatingsAutomatically() throws Exception {
+    void checkmateEndsTheGameAndRatingsFollowOnceTheOpponentConfirms() throws Exception {
         long game = startLive();
         String[] moves = {"f3", "e5", "g4"};
         for (int i = 0; i < moves.length; i++) {
@@ -157,9 +161,12 @@ class LiveGameApiTest extends ApiIntegrationTest {
         assertThat(body(mate).get("san").asText()).isEqualTo("Qh4#");
         assertThat(body(mate).get("gameOver").asBoolean()).isTrue();
         mvc.perform(as(get("/api/games/" + game), perToken))
-                .andExpect(jsonPath("$.status").value("FINISHED"))
+                .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.result").value("BLACK_WIN"))
                 .andExpect(jsonPath("$.termination").value("CHECKMATE"));
+        // Ola entered the last move, so Kari is the one who confirms.
+        assertThat(rating(ola)).isEqualTo(1200);
+        assertThat(confirm(kariToken, game).getResponse().getStatus()).isEqualTo(200);
         assertThat(rating(ola)).isEqualTo(1220);
         assertThat(rating(kari)).isEqualTo(1180);
         assertThat(body(move(kariToken, game, "a3", 4)).get("code").asText()).isEqualTo(ErrorCode.GAME_INVALID_STATE.code());
@@ -170,6 +177,8 @@ class LiveGameApiTest extends ApiIntegrationTest {
         long game = startLive();
         move(kariToken, game, "e4", 0);
         assertThat(finish(olaToken, game, "WHITE_WIN", "RESIGNATION").getResponse().getStatus()).isEqualTo(200);
+        assertThat(rating(kari)).isEqualTo(1200);
+        assertThat(confirm(kariToken, game).getResponse().getStatus()).isEqualTo(200);
         assertThat(rating(kari)).isEqualTo(1220);
 
         assertThat(body(finish(kariToken, game, "BLACK_WIN", "RESIGNATION")).get("code").asText())
@@ -179,7 +188,16 @@ class LiveGameApiTest extends ApiIntegrationTest {
     }
 
     @Test
-    void simultaneousFinishRequestsMoveRatingsExactlyOnce() throws Exception {
+    void adminFinishingALiveGameNeedsNoConfirmation() throws Exception {
+        long game = startLive();
+        move(kariToken, game, "e4", 0);
+        assertThat(finish(adminToken, game, "DRAW", "AGREEMENT").getResponse().getStatus()).isEqualTo(200);
+        assertThat(jdbc.queryForObject("SELECT status FROM game WHERE id = ?", String.class, game)).isEqualTo("FINISHED");
+        assertThat(ratedGames(kari, "CLASSICAL")).isEqualTo(1);
+    }
+
+    @Test
+    void simultaneousFinishRequestsRecordOneResultAndMoveRatingsExactlyOnce() throws Exception {
         long game = startLive();
         move(kariToken, game, "e4", 0);
         List<Callable<Integer>> tasks = new ArrayList<>();
@@ -193,6 +211,14 @@ class LiveGameApiTest extends ApiIntegrationTest {
 
         assertThat(statuses.stream().filter(s -> s == 200).count()).isEqualTo(1);
         assertThat(statuses).allMatch(s -> s == 200 || s == 409);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM rating_history WHERE game_id = ?", Integer.class, game)).isZero();
+
+        // Both players (and an admin) now race to confirm.
+        List<Callable<Integer>> confirmations = new ArrayList<>();
+        for (String token : new String[] {kariToken, olaToken, adminToken, adminToken, kariToken, olaToken}) {
+            confirmations.add(() -> confirm(token, game).getResponse().getStatus());
+        }
+        assertThat(runConcurrently(confirmations).stream().filter(s -> s == 200).count()).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM rating_history WHERE game_id = ?", Integer.class, game)).isEqualTo(2);
         assertThat(rating(kari) + rating(ola)).isEqualTo(2400);
         assertThat(Math.abs(rating(kari) - 1200)).isEqualTo(20);

@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/*
+ * Sjakkportal tokens. Spruce for structure, snow for pages, birch and walnut for the board,
+ * lingonberry only for "live" and the main action, moss only for rating gains.
+ */
+@theme {
+  --color-spruce: #17332b;
+  --color-spruce-2: #22473c;
+  --color-spruce-3: #2f5a4d;
+  --color-snow: #f6f7f4;
+  --color-birch: #e6d5b0;
+  --color-walnut: #6e4b32;
+  --color-berry: #b3243a;
+  --color-berry-dark: #8f1b2e;
+  --color-moss: #2e7a57;
+  --color-ink: #1c2522;
+  --color-slate: #56635d;
+  --color-mist: #dde3df;
+  --font-sans: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background: var(--color-snow);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    min-height: 100dvh;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  h1, h2, h3 {
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-berry);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.live-dot {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}

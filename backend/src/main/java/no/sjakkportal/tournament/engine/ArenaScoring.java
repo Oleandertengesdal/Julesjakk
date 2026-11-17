@@ -1,7 +1,7 @@
 package no.sjakkportal.tournament.engine;
 
 import java.util.List;
-import no.sjakkportal.common.NotImplementedYet;
+import java.util.Objects;
 
 /**
  * Arena scoring: win 2, draw 1, loss 0. After two consecutive wins a player is "on fire" and each
@@ -26,10 +26,20 @@ public final class ArenaScoring {
     }
 
     public static ArenaState apply(ArenaState before, Outcome outcome) {
-        throw new NotImplementedYet();
+        Objects.requireNonNull(outcome, "outcome");
+        int multiplier = before.onFire() ? 2 : 1;
+        return switch (outcome) {
+            case WIN -> new ArenaState(before.points() + 2 * multiplier, before.streak() + 1);
+            case DRAW -> new ArenaState(before.points() + multiplier, 0);
+            case LOSS -> new ArenaState(before.points(), 0);
+        };
     }
 
     public static ArenaState score(List<Outcome> outcomesInOrder) {
-        throw new NotImplementedYet();
+        ArenaState state = new ArenaState(0, 0);
+        for (Outcome outcome : outcomesInOrder) {
+            state = apply(state, outcome);
+        }
+        return state;
     }
 }

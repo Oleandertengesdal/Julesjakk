@@ -1,0 +1,45 @@
+# Render Blueprint for the Sjakkportal backend (Dashboard → New → Blueprint → pick this repo).
+# The database lives on Neon and the frontend on Vercel; see docs/DEPLOYMENT.md for the whole setup.
+services:
+  - type: web
+    name: sjakkportal-api
+    runtime: docker
+    plan: free            # sleeps after 15 idle minutes; "starter" stays awake
+    region: frankfurt     # closest Render region to Norway
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - backend/**
+      ignoredPaths:
+        - backend/src/test/**
+    envVars:
+      # Neon: the JDBC form of the *direct* (not -pooler) connection, e.g.
+      # jdbc:postgresql://ep-xxx.eu-central-1.aws.neon.tech/sjakkportal?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      # Signs access tokens. Generated once by Render (Base64, 256 bits) and kept across deploys.
+      - key: SJAKKPORTAL_JWT_SECRET
+        generateValue: true
+      # The frontend's address, e.g. https://sjakkportal.vercel.app (comma-separate several).
+      - key: SJAKKPORTAL_ALLOWED_ORIGINS
+        sync: false
+      # First admin, created only while the database has no admin. Must change password at first login.
+      - key: SJAKKPORTAL_ADMIN_USERNAME
+        sync: false
+      - key: SJAKKPORTAL_ADMIN_PASSWORD
+        sync: false
+      # The API is reached through the frontend's own domain, so the refresh cookie is first-party.
+      - key: SJAKKPORTAL_COOKIE_SAME_SITE
+        value: Lax
+      # Leave empty until you have checked Admin → Tilkobling after the first deploy (docs/DEPLOYMENT.md).
+      - key: SJAKKPORTAL_CLIENT_IP_HEADER
+        value: ""
+      - key: SJAKKPORTAL_CLIENT_IP_TRUSTED_HOPS
+        value: "1"

@@ -47,3 +47,11 @@ tasks.named('test') {
     // Phase 1 is deliberately red: report every failure instead of stopping at the first.
     ignoreFailures = providers.gradleProperty('reportOnly').isPresent()
 }
+
+// A fixed name so the Dockerfile does not depend on the version number.
+tasks.named('bootJar') {
+    archiveFileName = 'sjakkportal.jar'
+}
+tasks.named('jar') {
+    enabled = false
+}

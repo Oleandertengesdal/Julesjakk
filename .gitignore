@@ -17,3 +17,7 @@ frontend/dist/
 
 # Transfer file used when syncing from the build workspace
 .sjakkportal-sync.tar
+
+# Copied from node_modules on npm install
+frontend/public/stockfish/
+frontend/*.tsbuildinfo

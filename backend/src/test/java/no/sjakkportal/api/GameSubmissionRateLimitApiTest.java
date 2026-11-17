@@ -32,7 +32,6 @@ class GameSubmissionRateLimitApiTest extends ApiIntegrationTest {
         assertThat(body(fourth).get("code").asText()).isEqualTo(ErrorCode.RATE_LIMITED.code());
         assertThat(fourth.getResponse().getHeader("Retry-After")).matches("\\d+");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM game", Integer.class)).isEqualTo(3);
-        assertThat(jdbc.queryForObject("SELECT rated_games FROM app_user WHERE id = ?", Integer.class, kari)).isEqualTo(3);
     }
 
     @Test

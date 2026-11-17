@@ -10,23 +10,41 @@ CREATE TABLE app_user (
     id                   BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username             VARCHAR(32)  NOT NULL,
     display_name         VARCHAR(64)  NOT NULL,
-    password_hash        VARCHAR(100) NOT NULL,
+    password_hash        VARCHAR(100),          -- NULL only for managed players, who cannot log in
+    managed              BOOLEAN      NOT NULL DEFAULT FALSE,   -- player without a login; an admin acts for them
+    chess_com_username   VARCHAR(50),
+    lichess_username     VARCHAR(50),
     role                 VARCHAR(16)  NOT NULL DEFAULT 'PLAYER',
     enabled              BOOLEAN      NOT NULL DEFAULT TRUE,
     must_change_password BOOLEAN      NOT NULL DEFAULT FALSE,
     -- Bumped on password change/reset; access tokens carrying an older value are rejected.
     token_version        INTEGER      NOT NULL DEFAULT 0,
-    rating               INTEGER      NOT NULL DEFAULT 1200,
-    rated_games          INTEGER      NOT NULL DEFAULT 0,
     version              BIGINT       NOT NULL DEFAULT 0,
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at           TIMESTAMPTZ  NOT NULL DEFAULT now(),
     CONSTRAINT ck_app_user_role CHECK (role IN ('ADMIN', 'PLAYER')),
     CONSTRAINT ck_app_user_username CHECK (username ~ '^[a-z0-9_.-]{3,32}$'),
-    CONSTRAINT ck_app_user_rating CHECK (rating BETWEEN 100 AND 4000),
-    CONSTRAINT ck_app_user_rated_games CHECK (rated_games >= 0)
+    CONSTRAINT ck_app_user_login CHECK (managed = (password_hash IS NULL)),
+    CONSTRAINT ck_app_user_managed_role CHECK (NOT managed OR role = 'PLAYER')
 );
 CREATE UNIQUE INDEX ux_app_user_username ON app_user (username);
+CREATE UNIQUE INDEX ux_app_user_chess_com ON app_user (lower(chess_com_username)) WHERE chess_com_username IS NOT NULL;
+CREATE UNIQUE INDEX ux_app_user_lichess ON app_user (lower(lichess_username)) WHERE lichess_username IS NOT NULL;
+
+-- One Elo rating per player and time category. A missing row means "unrated": 1200 and no games.
+CREATE TABLE player_rating (
+    user_id     BIGINT      NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
+    category    VARCHAR(12) NOT NULL,
+    rating      INTEGER     NOT NULL DEFAULT 1200,
+    rated_games INTEGER     NOT NULL DEFAULT 0,
+    version     BIGINT      NOT NULL DEFAULT 0,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, category),
+    CONSTRAINT ck_player_rating_category CHECK (category IN ('BLITZ', 'RAPID', 'CLASSICAL')),
+    CONSTRAINT ck_player_rating_rating CHECK (rating BETWEEN 100 AND 4000),
+    CONSTRAINT ck_player_rating_games CHECK (rated_games >= 0)
+);
+CREATE INDEX ix_player_rating_leaderboard ON player_rating (category, rating DESC);
 
 CREATE TABLE invite_code (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -102,6 +120,10 @@ CREATE TABLE tournament (
     format        VARCHAR(24)  NOT NULL,
     status        VARCHAR(16)  NOT NULL DEFAULT 'DRAFT',
     rated         BOOLEAN      NOT NULL DEFAULT TRUE,
+    category      VARCHAR(12)  NOT NULL DEFAULT 'RAPID',
+    time_control  VARCHAR(32),
+    -- How a drawn knockout game is settled; required for elimination formats.
+    draw_resolution VARCHAR(16),
     total_rounds  INTEGER,                 -- NULL for arena
     current_round INTEGER      NOT NULL DEFAULT 0,
     starts_at     TIMESTAMPTZ,
@@ -111,6 +133,11 @@ CREATE TABLE tournament (
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
     CONSTRAINT ck_tournament_format CHECK (format IN
         ('ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ARENA')),
+    CONSTRAINT ck_tournament_category CHECK (category IN ('BLITZ', 'RAPID', 'CLASSICAL')),
+    CONSTRAINT ck_tournament_draw_resolution CHECK (draw_resolution IS NULL OR draw_resolution IN
+        ('REPLAY', 'BLITZ_PLAYOFF', 'ARMAGEDDON')),
+    CONSTRAINT ck_tournament_knockout_needs_resolution CHECK (
+        (format IN ('SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION')) = (draw_resolution IS NOT NULL)),
     CONSTRAINT ck_tournament_status CHECK (status IN ('DRAFT', 'ACTIVE', 'FINISHED', 'CANCELLED')),
     CONSTRAINT ck_tournament_rounds CHECK (total_rounds IS NULL OR total_rounds >= 1),
     CONSTRAINT ck_tournament_window CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at),
@@ -158,7 +185,14 @@ CREATE TABLE game (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     white_id            BIGINT      NOT NULL REFERENCES app_user (id),
     black_id            BIGINT      NOT NULL REFERENCES app_user (id),
+    -- PENDING = result registered by one player, waiting for the opponent (or an admin) to confirm.
     status              VARCHAR(12) NOT NULL DEFAULT 'FINISHED',
+    category            VARCHAR(12) NOT NULL DEFAULT 'CLASSICAL',
+    stage               VARCHAR(12) NOT NULL DEFAULT 'MAIN',   -- knockout tie-break games are PLAYOFF / ARMAGEDDON
+    registered_by       BIGINT REFERENCES app_user (id),        -- who reported the result
+    confirmed_by        BIGINT REFERENCES app_user (id),
+    confirmed_at        TIMESTAMPTZ,
+    rejection_reason    VARCHAR(300),
     result              VARCHAR(12),
     termination         VARCHAR(24),
     source              VARCHAR(16) NOT NULL DEFAULT 'OTB',
@@ -183,9 +217,14 @@ CREATE TABLE game (
     version             BIGINT      NOT NULL DEFAULT 0,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_game_distinct_players CHECK (white_id <> black_id),
-    CONSTRAINT ck_game_status CHECK (status IN ('SCHEDULED', 'LIVE', 'FINISHED', 'ABORTED')),
+    CONSTRAINT ck_game_status CHECK (status IN ('SCHEDULED', 'LIVE', 'PENDING', 'REJECTED', 'FINISHED', 'ABORTED')),
+    CONSTRAINT ck_game_category CHECK (category IN ('BLITZ', 'RAPID', 'CLASSICAL')),
+    CONSTRAINT ck_game_stage CHECK (stage IN ('MAIN', 'PLAYOFF', 'ARMAGEDDON')),
+    -- Only a confirmed game may carry rating changes.
+    CONSTRAINT ck_game_rating_only_when_finished CHECK (status = 'FINISHED' OR white_rating_delta IS NULL),
+    CONSTRAINT ck_game_confirmation CHECK ((confirmed_at IS NULL) = (confirmed_by IS NULL)),
     CONSTRAINT ck_game_result CHECK (result IS NULL OR result IN ('WHITE_WIN', 'BLACK_WIN', 'DRAW')),
-    CONSTRAINT ck_game_result_matches_status CHECK ((status = 'FINISHED') = (result IS NOT NULL)),
+    CONSTRAINT ck_game_result_matches_status CHECK ((status IN ('FINISHED', 'PENDING', 'REJECTED')) = (result IS NOT NULL)),
     CONSTRAINT ck_game_termination CHECK (termination IS NULL OR termination IN
         ('CHECKMATE', 'RESIGNATION', 'TIMEOUT', 'STALEMATE', 'THREEFOLD_REPETITION', 'FIFTY_MOVE_RULE',
          'INSUFFICIENT_MATERIAL', 'AGREEMENT', 'FORFEIT', 'UNKNOWN')),
@@ -202,6 +241,10 @@ CREATE INDEX ix_game_status_featured ON game (status, featured, played_at DESC);
 CREATE UNIQUE INDEX ux_game_external ON game (source, external_id) WHERE external_id IS NOT NULL;
 CREATE UNIQUE INDEX ux_game_client_request ON game (created_by, client_request_id) WHERE client_request_id IS NOT NULL;
 CREATE INDEX ix_game_created_by ON game (created_by);
+CREATE INDEX ix_game_registered_by ON game (registered_by);
+CREATE INDEX ix_game_confirmed_by ON game (confirmed_by);
+-- The admin queue and each player's "waiting for you" list.
+CREATE INDEX ix_game_pending ON game (played_at) WHERE status = 'PENDING';
 
 CREATE TABLE game_move (
     game_id   BIGINT       NOT NULL REFERENCES game (id) ON DELETE CASCADE,
@@ -244,13 +287,14 @@ CREATE TABLE rating_history (
     id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id       BIGINT      NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
     game_id       BIGINT      NOT NULL REFERENCES game (id) ON DELETE CASCADE,
+    category      VARCHAR(12) NOT NULL,
     rating_before INTEGER     NOT NULL,
     rating_after  INTEGER     NOT NULL,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- A game can move a player's rating exactly once, whatever the retry/concurrency story.
     CONSTRAINT ux_rating_history_user_game UNIQUE (user_id, game_id)
 );
-CREATE INDEX ix_rating_history_user_time ON rating_history (user_id, created_at);
+CREATE INDEX ix_rating_history_user_time ON rating_history (user_id, category, created_at);
 CREATE INDEX ix_rating_history_game ON rating_history (game_id);
 
 CREATE TABLE tournament_pairing (
@@ -261,6 +305,8 @@ CREATE TABLE tournament_pairing (
     black_participant_id BIGINT REFERENCES tournament_participant (id),   -- NULL with a white player = bye
     game_id              BIGINT REFERENCES game (id) ON DELETE SET NULL,
     result               VARCHAR(12),
+    advancing_participant_id BIGINT REFERENCES tournament_participant (id),   -- knockout winner, after any tie-break
+    decided_at           TIMESTAMPTZ,
     version              BIGINT      NOT NULL DEFAULT 0,
     CONSTRAINT ux_tournament_pairing_board UNIQUE (round_id, board_number),
     CONSTRAINT ux_tournament_pairing_game UNIQUE (game_id),
@@ -271,11 +317,8 @@ CREATE TABLE tournament_pairing (
 CREATE INDEX ix_tournament_pairing_white ON tournament_pairing (white_participant_id);
 CREATE INDEX ix_tournament_pairing_black ON tournament_pairing (black_participant_id);
 
-CREATE TABLE user_badge (
-    user_id    BIGINT      NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
-    badge_code VARCHAR(40) NOT NULL,
-    game_id    BIGINT REFERENCES game (id) ON DELETE SET NULL,
-    awarded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (user_id, badge_code)
-);
-CREATE INDEX ix_user_badge_game ON user_badge (game_id);
+CREATE INDEX ix_tournament_pairing_advancing ON tournament_pairing (advancing_participant_id);
+
+-- Tie-break games of a knockout pairing (the main game is tournament_pairing.game_id).
+ALTER TABLE game ADD COLUMN tournament_pairing_id BIGINT REFERENCES tournament_pairing (id) ON DELETE SET NULL;
+CREATE INDEX ix_game_tournament_pairing ON game (tournament_pairing_id);

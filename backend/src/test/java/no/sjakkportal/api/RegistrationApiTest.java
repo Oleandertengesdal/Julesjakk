@@ -261,7 +261,7 @@ class RegistrationApiTest extends ApiIntegrationTest {
         assertThat(result.getResponse().getStatus()).isIn(201, 400);
         Integer admins = jdbc.queryForObject("SELECT count(*) FROM app_user WHERE role = 'ADMIN'", Integer.class);
         assertThat(admins).isEqualTo(1);
-        Integer inflated = jdbc.queryForObject("SELECT count(*) FROM app_user WHERE rating <> 1200", Integer.class);
+        Integer inflated = jdbc.queryForObject("SELECT count(*) FROM player_rating WHERE rating <> 1200", Integer.class);
         assertThat(inflated).isZero();
     }
 

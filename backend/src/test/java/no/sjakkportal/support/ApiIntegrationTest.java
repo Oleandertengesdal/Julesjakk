@@ -56,16 +56,26 @@ public abstract class ApiIntegrationTest {
     @Autowired
     protected ObjectMapper json;
 
+    @Autowired
+    private no.sjakkportal.ratelimit.RateLimiter rateLimiter;
+
     /** A client address unique to this test, so in-memory rate limits never leak between tests. */
     protected String clientIp;
 
+    @Autowired
+    private no.sjakkportal.live.LiveUpdatePublisher liveUpdates;
+
     @BeforeEach
     void resetState() {
+        // The broadcaster reads games in the background; let it finish before the tables are emptied.
+        liveUpdates.awaitIdle();
         jdbc.execute("""
-                TRUNCATE TABLE user_badge, tournament_pairing, rating_history, game_analysis, game_move, game,
+                TRUNCATE TABLE tournament_pairing, rating_history, player_rating, game_analysis, game_move, game,
                     tournament_round, tournament_participant, tournament, audit_log, password_reset_token,
                     refresh_token, invite_redemption, invite_code, app_user
                 RESTART IDENTITY CASCADE""");
+        // User ids restart at 1 after the truncate, so per-user buckets would otherwise carry over.
+        rateLimiter.clear();
         clientIp = nextIp();
     }
 
@@ -93,6 +103,24 @@ public abstract class ApiIntegrationTest {
     protected long createInvite(long adminId, String code, Integer maxUses, String expiresAtSql) {
         return jdbc.queryForObject("INSERT INTO invite_code (code, created_by, max_uses, expires_at) VALUES (?, ?, ?, "
                 + (expiresAtSql == null ? "NULL" : expiresAtSql) + ") RETURNING id", Long.class, code, adminId, maxUses);
+    }
+
+    /** A player without a login, as an admin would create for a young child. */
+    protected long createManagedPlayer(String username) {
+        return jdbc.queryForObject("""
+                INSERT INTO app_user (username, display_name, managed) VALUES (?, ?, TRUE) RETURNING id""",
+                Long.class, username, capitalize(username));
+    }
+
+    /** Current rating in a category; players without a rating row are on the initial 1200. */
+    protected int rating(long user, String category) {
+        return jdbc.query("SELECT rating FROM player_rating WHERE user_id = ? AND category = ?",
+                rs -> rs.next() ? rs.getInt(1) : 1200, user, category);
+    }
+
+    protected int ratedGames(long user, String category) {
+        return jdbc.query("SELECT rated_games FROM player_rating WHERE user_id = ? AND category = ?",
+                rs -> rs.next() ? rs.getInt(1) : 0, user, category);
     }
 
     private static String capitalize(String value) {

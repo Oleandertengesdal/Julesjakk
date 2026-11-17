@@ -29,9 +29,9 @@ class SchemaMigrationTest extends ApiIntegrationTest {
     void allExpectedTablesExist() {
         List<String> tables = jdbc.queryForList(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'", String.class);
-        assertThat(tables).contains("app_user", "invite_code", "invite_redemption", "refresh_token",
+        assertThat(tables).contains("app_user", "player_rating", "invite_code", "invite_redemption", "refresh_token",
                 "password_reset_token", "audit_log", "tournament", "tournament_participant", "tournament_round",
-                "tournament_pairing", "game", "game_move", "game_analysis", "rating_history", "user_badge");
+                "tournament_pairing", "game", "game_move", "game_analysis", "rating_history");
     }
 
     @Test
@@ -39,7 +39,7 @@ class SchemaMigrationTest extends ApiIntegrationTest {
         List<String> versioned = jdbc.queryForList("""
                 SELECT table_name FROM information_schema.columns
                 WHERE table_schema = 'public' AND column_name = 'version' AND is_nullable = 'NO'""", String.class);
-        assertThat(versioned).contains("app_user", "invite_code", "game", "game_analysis", "tournament",
+        assertThat(versioned).contains("app_user", "player_rating", "invite_code", "game", "game_analysis", "tournament",
                 "tournament_participant", "tournament_pairing");
     }
 
@@ -134,9 +134,9 @@ class SchemaMigrationTest extends ApiIntegrationTest {
         long kari = createPlayer("kari");
         long ola = createPlayer("ola");
         long game = game(kari, ola, "FINISHED", "WHITE_WIN");
-        jdbc.update("INSERT INTO rating_history (user_id, game_id, rating_before, rating_after) VALUES (?, ?, 1200, 1220)", kari, game);
+        jdbc.update("INSERT INTO rating_history (user_id, game_id, category, rating_before, rating_after) VALUES (?, ?, 'RAPID', 1200, 1220)", kari, game);
         assertThatThrownBy(() -> jdbc.update(
-                "INSERT INTO rating_history (user_id, game_id, rating_before, rating_after) VALUES (?, ?, 1220, 1240)", kari, game))
+                "INSERT INTO rating_history (user_id, game_id, category, rating_before, rating_after) VALUES (?, ?, 'RAPID', 1220, 1240)", kari, game))
                 .isInstanceOf(DuplicateKeyException.class);
     }
 
@@ -158,10 +158,65 @@ class SchemaMigrationTest extends ApiIntegrationTest {
     @Test
     void ratingsStayWithinSaneBounds() {
         long kari = createPlayer("kari");
-        assertThatThrownBy(() -> jdbc.update("UPDATE app_user SET rating = 50 WHERE id = ?", kari))
+        jdbc.update("INSERT INTO player_rating (user_id, category) VALUES (?, 'BLITZ')", kari);
+        assertThatThrownBy(() -> jdbc.update("UPDATE player_rating SET rating = 50 WHERE user_id = ?", kari))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update("UPDATE app_user SET rated_games = -1 WHERE id = ?", kari))
+        assertThatThrownBy(() -> jdbc.update("UPDATE player_rating SET rated_games = -1 WHERE user_id = ?", kari))
                 .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO player_rating (user_id, category) VALUES (?, 'BULLET')", kari))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void aPlayerHasExactlyOneRatingPerCategory() {
+        long kari = createPlayer("kari");
+        jdbc.update("INSERT INTO player_rating (user_id, category) VALUES (?, 'BLITZ')", kari);
+        jdbc.update("INSERT INTO player_rating (user_id, category) VALUES (?, 'RAPID')", kari);
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO player_rating (user_id, category) VALUES (?, 'BLITZ')", kari))
+                .isInstanceOf(DuplicateKeyException.class);
+    }
+
+    @Test
+    void unconfirmedGamesCarryAResultButNeverARatingChange() {
+        long kari = createPlayer("kari");
+        long ola = createPlayer("ola");
+        long pending = game(kari, ola, "PENDING", "WHITE_WIN");
+        assertThatThrownBy(() -> game(kari, ola, "PENDING", null)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("UPDATE game SET white_rating_delta = 20 WHERE id = ?", pending))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void managedPlayersHaveNoPasswordAndEveryoneElseMustHaveOne() {
+        assertThat(createManagedPlayer("lillebror")).isPositive();
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO app_user (username, display_name, managed, password_hash) VALUES ('snik', 'Snik', TRUE, 'x')"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO app_user (username, display_name) VALUES ('tom', 'Tom')"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO app_user (username, display_name, managed, role) VALUES ('sjef', 'Sjef', TRUE, 'ADMIN')"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void linkedOnlineAccountsAreUniqueIgnoringCase() {
+        long kari = createPlayer("kari");
+        long ola = createPlayer("ola");
+        jdbc.update("UPDATE app_user SET lichess_username = 'MagnusFan' WHERE id = ?", kari);
+        assertThatThrownBy(() -> jdbc.update("UPDATE app_user SET lichess_username = 'magnusfan' WHERE id = ?", ola))
+                .isInstanceOf(DuplicateKeyException.class);
+        assertThat(jdbc.update("UPDATE app_user SET chess_com_username = 'magnusfan' WHERE id = ?", ola)).isEqualTo(1);
+    }
+
+    @Test
+    void knockoutTournamentsMustSayHowDrawsAreSettled() {
+        long admin = createAdmin("admin");
+        String insert = "INSERT INTO tournament (name, format, draw_resolution, created_by) VALUES ('Cup', ?, ?, ?)";
+        assertThatThrownBy(() -> jdbc.update(insert, "SINGLE_ELIMINATION", null, admin)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(insert, "SWISS", "ARMAGEDDON", admin)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(insert, "DOUBLE_ELIMINATION", "COIN_TOSS", admin)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbc.update(insert, "DOUBLE_ELIMINATION", "BLITZ_PLAYOFF", admin)).isEqualTo(1);
     }
 
     @Test

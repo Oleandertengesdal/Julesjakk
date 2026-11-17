@@ -83,6 +83,10 @@ public enum ErrorCode {
             "Dette partiet er allerede importert."),
     GAME_NOT_PARTICIPANT("CHESS-GAME-007", HttpStatus.FORBIDDEN, "Only participants or admins may modify a game",
             "Bare spillerne i partiet eller en administrator kan gjøre dette."),
+    GAME_SELF_CONFIRMATION("CHESS-GAME-008", HttpStatus.FORBIDDEN, "The player who registered a result cannot confirm it",
+            "Motstanderen din eller en administrator må bekrefte partiet."),
+    GAME_INVALID_TIME_CONTROL("CHESS-GAME-009", HttpStatus.UNPROCESSABLE_ENTITY, "Time control invalid or inconsistent with the category",
+            "Tidskontrollen er ugyldig eller passer ikke med valgt kategori."),
 
     // --- Analysis -----------------------------------------------------------------------
     ANALYSIS_INVALID("CHESS-ANALYSIS-001", HttpStatus.UNPROCESSABLE_ENTITY, "Analysis payload invalid",
@@ -105,6 +109,10 @@ public enum ErrorCode {
             "Resultatet passer ikke med oppsettet i turneringen."),
     TOURNAMENT_ARENA_CLOSED("CHESS-TOURN-007", HttpStatus.CONFLICT, "Arena window is not open",
             "Arenaen er ikke åpen akkurat nå."),
+    TOURNAMENT_INVALID_CONFIG("CHESS-TOURN-008", HttpStatus.UNPROCESSABLE_ENTITY, "Invalid tournament configuration",
+            "Turneringsoppsettet er ugyldig."),
+    TOURNAMENT_NOT_PARTICIPANT("CHESS-TOURN-009", HttpStatus.CONFLICT, "Player is not registered in this tournament",
+            "Spilleren er ikke påmeldt denne turneringen."),
 
     // --- Users, imports, rate limiting --------------------------------------------------
     USER_NOT_FOUND("CHESS-USER-001", HttpStatus.NOT_FOUND, "User not found",
@@ -113,6 +121,8 @@ public enum ErrorCode {
             "Lenken gjenkjennes ikke som et parti fra Chess.com eller Lichess."),
     IMPORT_UPSTREAM_FAILED("CHESS-IMPORT-002", HttpStatus.BAD_GATEWAY, "Could not fetch the game from the external site",
             "Partiet kunne ikke hentes fra den eksterne tjenesten. Prøv igjen senere, eller lim inn PGN."),
+    IMPORT_NOT_FAMILY_GAME("CHESS-IMPORT-003", HttpStatus.UNPROCESSABLE_ENTITY, "Both players must be linked family members",
+            "Begge spillerne må være familiemedlemmer med koblet Chess.com- eller Lichess-brukernavn."),
     RATE_LIMITED("CHESS-RATE-001", HttpStatus.TOO_MANY_REQUESTS, "Too many requests",
             "For mange forsøk. Vent litt og prøv igjen."),
 
