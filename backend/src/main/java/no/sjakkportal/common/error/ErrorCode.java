@@ -115,6 +115,8 @@ public enum ErrorCode {
             "Spilleren er ikke påmeldt denne turneringen."),
 
     // --- Users, imports, rate limiting --------------------------------------------------
+    USER_CANNOT_DISABLE("CHESS-USER-002", HttpStatus.CONFLICT, "This account cannot be disabled",
+            "Du kan ikke deaktivere din egen konto."),
     USER_NOT_FOUND("CHESS-USER-001", HttpStatus.NOT_FOUND, "User not found",
             "Brukeren finnes ikke."),
     IMPORT_UNSUPPORTED_SOURCE("CHESS-IMPORT-001", HttpStatus.UNPROCESSABLE_ENTITY, "Unsupported import link",

@@ -33,10 +33,11 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserView> list() {
+    /** Everyone, by name. Disabled accounts are left out unless asked for (the admin's access list). */
+    public List<UserView> list(boolean includeDisabled) {
         List<AppUser> all = users.findAll(Sort.by("displayName"));
         Map<Long, Map<TimeCategory, RatingView>> ratings = ratings(all.stream().map(AppUser::getId).toList());
-        return all.stream().filter(AppUser::isEnabled).map(user -> toView(user, ratings.getOrDefault(user.getId(), Map.of()))).toList();
+        return all.stream().filter(u -> includeDisabled || u.isEnabled()).map(user -> toView(user, ratings.getOrDefault(user.getId(), Map.of()))).toList();
     }
 
     @Transactional
@@ -82,7 +83,7 @@ public class UserService {
         for (TimeCategory category : TimeCategory.values()) {
             ratings.put(category.name(), stored.getOrDefault(category, new RatingView(EloCalculator.INITIAL_RATING, 0)));
         }
-        return new UserView(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole().name(), user.isManaged(),
+        return new UserView(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole().name(), user.isManaged(), user.isEnabled(),
                 user.isMustChangePassword(), user.getChessComUsername(), user.getLichessUsername(), ratings);
     }
 }

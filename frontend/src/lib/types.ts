@@ -15,6 +15,7 @@ export interface User {
   displayName: string;
   role: 'ADMIN' | 'PLAYER';
   managed: boolean;
+  enabled: boolean;
   mustChangePassword: boolean;
   chessComUsername: string | null;
   lichessUsername: string | null;

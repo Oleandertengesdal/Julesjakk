@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { Button, Empty, ErrorNotice, PageTitle, SelectField, Tabs, TextField } from '../components/ui';
 import { PendingGames } from '../components/PendingGames';
 import { PlayerPicker } from '../components/PlayerPicker';
+import { AccessList } from '../components/AccessList';
+import { useAuth } from '../lib/auth';
 import { api, ApiError } from '../lib/api';
 import { formatDateTime } from '../lib/format';
 import { useApi } from '../lib/useApi';
@@ -125,11 +127,13 @@ function Invites() {
 
 function Players() {
   const users = useApi<User[]>('/api/users');
+  const { user: me } = useAuth();
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [target, setTarget] = useState<number | ''>('');
   const [mode, setMode] = useState<'TEMPORARY_PASSWORD' | 'RESET_LINK'>('RESET_LINK');
   const [issued, setIssued] = useState<string | null>(null);
+  const [issuedMode, setIssuedMode] = useState(mode);
   const [error, setError] = useState<ApiError | null>(null);
   const [created, setCreated] = useState<string | null>(null);
 
@@ -155,6 +159,7 @@ function Players() {
       setIssued(result.temporaryPassword
         ? `Midlertidig passord: ${result.temporaryPassword}. Spilleren må velge nytt passord ved neste innlogging.`
         : `${window.location.origin}/reset-password?token=${result.resetToken}`);
+      setIssuedMode(mode);
     } catch (e) {
       setError(e as ApiError);
     }
@@ -173,7 +178,11 @@ function Players() {
         {issued && (
           <div role="status" className="rounded-md border-l-4 border-moss bg-white px-4 py-3">
             <p className="break-all font-semibold">{issued}</p>
-            <p className="mt-1 text-sm text-slate">Vises bare nå. Alle innlogginger for spilleren er avsluttet.</p>
+            <p className="mt-1 text-sm text-slate">
+              {issuedMode === 'TEMPORARY_PASSWORD'
+                ? 'Vises bare nå. Alle innlogginger for spilleren er avsluttet.'
+                : 'Vises bare nå. Når lenken brukes, avsluttes alle innlogginger for spilleren.'}
+            </p>
           </div>
         )}
       </section>
@@ -185,6 +194,19 @@ function Players() {
         <div><Button type="submit" variant="primary" disabled={!username || !displayName}>Legg til spiller</Button></div>
         {created && <p role="status" className="text-sm text-moss">{created}</p>}
       </form>
+      <section className="flex flex-col gap-4 lg:col-span-2">
+        <h2 className="text-xl font-extrabold text-spruce">Tilgang</h2>
+        <p className="text-slate">En deaktivert konto logges ut overalt med en gang. Partiene og ratingen blir stående.</p>
+        <AccessList users={users.data ?? []} currentUserId={me?.id ?? 0} onToggle={async (id, enable) => {
+          setError(null);
+          try {
+            await api.post(`/api/admin/users/${id}/${enable ? 'enable' : 'disable'}`);
+            await users.reload();
+          } catch (e) {
+            setError(e as ApiError);
+          }
+        }} />
+      </section>
       <div className="lg:col-span-2"><ErrorNotice error={error} /></div>
     </div>
   );

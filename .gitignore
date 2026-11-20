@@ -22,3 +22,6 @@ frontend/dist/
 frontend/public/stockfish/
 frontend/*.tsbuildinfo
 .mac.sums
+# Test-runner caches
+node_modules/
+frontend/.vitest/

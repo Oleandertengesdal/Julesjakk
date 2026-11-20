@@ -94,6 +94,15 @@ public class AppUser {
         this.updatedAt = Instant.now();
     }
 
+    /** Disabling also invalidates every access token at once; refresh tokens are revoked by the caller. */
+    public void setEnabled(boolean enabled) {
+        if (this.enabled && !enabled) {
+            this.tokenVersion++;
+        }
+        this.enabled = enabled;
+        this.updatedAt = Instant.now();
+    }
+
     public Long getId() {
         return id;
     }

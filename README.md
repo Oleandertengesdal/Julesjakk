@@ -135,8 +135,8 @@ to create an invite code for the family.
 ### Tests
 
 ```bash
-cd backend && ./gradlew test             # 774 tests against the PostgreSQL from docker compose
-cd frontend && npm test                  # 72 tests, including the engine driver against real Stockfish
+cd backend && ./gradlew test             # 1086 tests against the PostgreSQL from docker compose
+cd frontend && npm test                  # 75 tests, including the engine driver against real Stockfish
 cd frontend && npm run build             # type-check and production build
 ```
 

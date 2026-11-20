@@ -118,7 +118,9 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 | GET | `/api/admin/invites` | All invite codes with uses |
 | POST | `/api/admin/invites` | `code` (optional; generated `XXXX-XXXX-XXXX-XXXX` otherwise), `maxUses`, `expiresInHours` or `expiresAt`, `note` |
 | DELETE | `/api/admin/invites/{id}` | Revokes a code |
-| POST | `/api/admin/users/{id}/password-reset` | `mode`: `TEMPORARY_PASSWORD` (returns a one-off password; user must change it) or `RESET_LINK` (returns a 24-hour link) |
+| POST | `/api/admin/users/{id}/disable` | Shuts the account out at once: login refused (`CHESS-AUTH-006`, shown only after a correct password), access tokens and sessions ended. Not for your own account (`CHESS-USER-002`). Games and ratings stay |
+| POST | `/api/admin/users/{id}/enable` | Lets a disabled account log in again |
+| POST | `/api/admin/users/{id}/password-reset` | `mode`: `TEMPORARY_PASSWORD` (returns a one-off password; user must change it) or `RESET_LINK` (returns a single-use token valid for 24 hours; the admin page turns it into a `/reset-password?token=…` link) |
 | POST | `/api/admin/players` | `username`, `displayName`. A managed player without login, for children |
 | GET | `/api/admin/games/pending` | Every unconfirmed game |
 | POST | `/api/admin/games/{id}/feature` | `featured`: show this game on TV |
@@ -190,7 +192,7 @@ All server-side codes, generated from
 | `CHESS-AUTH-003` | 403 | Access denied | Du har ikke tilgang til dette. | The endpoint needs the admin role, or the user is not allowed to see this resource. |
 | `CHESS-AUTH-004` | 403 | Password change required | Du må velge et nytt passord før du kan fortsette. | The account has a temporary password (bootstrap admin, admin reset). Only `/api/auth/change-password`, `/api/users/me` and logout work until it is changed. |
 | `CHESS-AUTH-005` | 401 | Refresh token invalid, expired or reused | Økten din er ikke lenger gyldig. Logg inn på nytt. | The refresh cookie is missing, expired (30 days), revoked by logout or password change, or was used twice (all sessions of that login are then revoked). Log in again. If it happens right after every login, see "Logged out on every reload" below. |
-| `CHESS-AUTH-006` | 403 | Account disabled | Kontoen din er deaktivert. Ta kontakt med en administrator. | An admin disabled the account. |
+| `CHESS-AUTH-006` | 403 | Account disabled | Kontoen din er deaktivert. Ta kontakt med en administrator. | An admin disabled the account (Admin → Spillere og passord → Deaktiver). An admin can enable it again. |
 | `CHESS-AUTH-007` | 422 | Password does not meet the policy | Passordet må ha minst 8 tegn og kan ikke være likt brukernavnet. | 8 characters minimum, at most 72 bytes (BCrypt's limit), not equal to the username. |
 | `CHESS-AUTH-008` | 401 | Authentication required | Du må logge inn for å fortsette. | No `Authorization: Bearer` header on an endpoint that needs one. |
 | `CHESS-AUTH-009` | 409 | Username already taken | Brukernavnet er allerede i bruk. | Pick another username (comparison is case-insensitive). |
@@ -265,6 +267,7 @@ All server-side codes, generated from
 | Code | HTTP | Meaning | Message shown (bokmål) | Cause and fix |
 |------|------|---------|------------------------|---------------|
 | `CHESS-USER-001` | 404 | User not found | Brukeren finnes ikke. | Wrong id. |
+| `CHESS-USER-002` | 409 | This account cannot be disabled | Du kan ikke deaktivere din egen konto. | An admin tried to disable their own account. Another admin must do it, so the site always has an admin who can log in. |
 | `CHESS-IMPORT-001` | 422 | Unsupported import link | Lenken gjenkjennes ikke som et parti fra Chess.com eller Lichess. | Only Lichess game links (`lichess.org/<8 or 12 characters>`) and Chess.com game links (`chess.com/game/live/<number>`, `/game/daily/…`, `/live/game/…`) are recognised. |
 | `CHESS-IMPORT-002` | 502 | Could not fetch the game from the external site | Partiet kunne ikke hentes fra den eksterne tjenesten. Prøv igjen senere, eller lim inn PGN. | The external site did not answer, rate-limited us, or changed its format (Chess.com's endpoint is unofficial). Paste the PGN instead. |
 | `CHESS-IMPORT-003` | 422 | Both players must be linked family members | Begge spillerne må være familiemedlemmer med koblet Chess.com- eller Lichess-brukernavn. | Both online usernames in the game must be linked to family members in Innstillinger. |

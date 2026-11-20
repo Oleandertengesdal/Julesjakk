@@ -37,9 +37,10 @@ public class UserController {
         return userService.linkAccounts(currentUser.id(), body.lichessUsername(), body.chessComUsername());
     }
 
+    /** Admins also see disabled accounts, so they can enable them again. */
     @GetMapping
-    List<UserView> list() {
-        return userService.list();
+    List<UserView> list(@AuthenticationPrincipal CurrentUser currentUser) {
+        return userService.list(currentUser.isAdmin());
     }
 
     @GetMapping("/{id}")

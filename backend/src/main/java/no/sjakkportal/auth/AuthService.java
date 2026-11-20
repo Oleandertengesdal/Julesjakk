@@ -138,6 +138,27 @@ public class AuthService {
         refreshTokens.revokeAllFor(userId);
     }
 
+    /**
+     * Admin action: shut an account out (or let it back in). Disabling ends every session at once:
+     * access tokens through the token version, refresh tokens by revocation.
+     */
+    @Transactional
+    public UserView setEnabled(long adminId, long userId, boolean enabled) {
+        AppUser user = users.findById(userId).orElseThrow(() -> new ChessException(ErrorCode.USER_NOT_FOUND));
+        if (!enabled && userId == adminId) {
+            throw new ChessException(ErrorCode.USER_CANNOT_DISABLE);
+        }
+        if (user.isEnabled() != enabled) {
+            user.setEnabled(enabled);
+            users.saveAndFlush(user);
+            if (!enabled) {
+                refreshTokens.revokeAllFor(userId);
+            }
+            auditLog.record(adminId, enabled ? "USER_ENABLED" : "USER_DISABLED", "user:" + userId, null);
+        }
+        return userService.toView(user);
+    }
+
     /** Admin action: either a temporary password (must be changed at next login) or a one-time reset token. */
     @Transactional
     public ResetIssued issueReset(long adminId, long userId, ResetMode mode) {

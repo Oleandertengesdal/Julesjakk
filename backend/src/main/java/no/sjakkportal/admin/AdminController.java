@@ -88,6 +88,16 @@ public class AdminController {
         return authService.issueReset(admin.id(), id, body.mode());
     }
 
+    @PostMapping("/users/{id}/disable")
+    UserView disable(@PathVariable long id, @AuthenticationPrincipal CurrentUser admin) {
+        return authService.setEnabled(admin.id(), id, false);
+    }
+
+    @PostMapping("/users/{id}/enable")
+    UserView enable(@PathVariable long id, @AuthenticationPrincipal CurrentUser admin) {
+        return authService.setEnabled(admin.id(), id, true);
+    }
+
     /** Creates a player without a login, for family members who will not manage an account themselves. */
     @PostMapping("/players")
     @Transactional

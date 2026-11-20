@@ -91,6 +91,12 @@ the session is restored through the refresh cookie.
 
 Issuing a new reset invalidates any earlier unused link for that user.
 
+**Disabling an account** (a lost phone, someone who should no longer have access): an admin presses
+**Deaktiver**. Login is refused from then on, every access token stops working at once (`token_version`),
+and every refresh token is revoked. The account's games and ratings stay. Only someone who types the
+correct password is told the account is disabled; anyone else sees an ordinary wrong-password error.
+Admins cannot disable themselves. **Aktiver** lets the account back in.
+
 **Managed players** (young children) have no password and cannot log in. Admins register their games.
 
 ## Invite codes
@@ -192,6 +198,7 @@ A malformed `Origin` is refused, not parsed loosely.
 Admin actions are written to `audit_log` with the actor, target and request trace id:
 - invites created and revoked;
 - password resets issued;
+- accounts disabled and enabled;
 - managed players created;
 - games registered, reported, finished or confirmed by an admin;
 - tournaments created, started, finished and cancelled.
@@ -219,6 +226,21 @@ No secrets are in the repository or in the frontend bundle. `VITE_*` values are 
 - **Admin trust.** An admin can register and confirm any result. Admin actions are audited, not prevented.
 - **Analysis trust.** The browser computes engine analysis. A determined user could submit a fabricated
   analysis of their own game. Analyses never affect ratings, and they are validated for shape and range.
+
+## How this is tested
+
+The promises in this document are tested from outside, the way an attacker would probe them. The
+tests live in `backend/src/test/java/no/sjakkportal/audit/`; they were written from this document and
+[API_AND_ERRORS.md](API_AND_ERRORS.md) before the code was re-read.
+
+| Test | What it attacks |
+|------|-----------------|
+| `AccessControlMatrixTest` | Every endpoint with no token, a forged or malformed token, and a player's token on admin endpoints. Also fails if an endpoint exists that is not documented, or is documented but missing |
+| `SecurityAuditTest` | Token tampering (`alg: none`, edited payload, wrong key, expiry), session revocation, refresh-token reuse, cookie flags, CSRF via foreign origins, mass assignment, enumeration, password policy, reset links, invites, markup in free text, oversized and malformed input, data exposure, actuator, CORS, rate limits |
+| `WebSocketSecurityAuditTest` | Connecting without or with a forged token, foreign-origin handshakes, and clients trying to publish fake updates to other viewers |
+| `IntegrityAuditTest` | Who may register, confirm, reject and move; ratings applied exactly once (also under concurrency); unrated games; tournament and arena rules; analysis tampering |
+| `ImportAndParameterAuditTest` | Import links crafted to reach other hosts (cloud metadata, look-alike domains, `file:`), non-JSON bodies, bad query parameters |
+| `AccountDisablingTest` | Disabling and enabling accounts |
 
 ## Reporting a problem
 

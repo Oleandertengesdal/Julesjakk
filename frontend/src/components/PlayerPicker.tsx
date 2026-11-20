@@ -7,7 +7,7 @@ export function PlayerPicker({ label, users, value, onChange, exclude }: {
   return (
     <SelectField label={label} value={value} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : '')} required>
       <option value="">Velg spiller</option>
-      {users.filter((u) => u.id !== exclude).map((u) => (
+      {users.filter((u) => u.enabled !== false && u.id !== exclude).map((u) => (
         <option key={u.id} value={u.id}>{u.displayName}</option>
       ))}
     </SelectField>

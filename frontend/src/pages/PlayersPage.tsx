@@ -9,7 +9,7 @@ export default function PlayersPage() {
   const [category, setCategory] = useState<Category>('RAPID');
   const board = useApi<LeaderboardRow[]>(`/api/leaderboard?category=${category}`);
   const users = useApi<User[]>('/api/users');
-  const unranked = (users.data ?? []).filter((u) => !board.data?.some((row) => row.user.id === u.id));
+  const unranked = (users.data ?? []).filter((u) => u.enabled && !board.data?.some((row) => row.user.id === u.id));
 
   return (
     <div className="flex flex-col gap-8">

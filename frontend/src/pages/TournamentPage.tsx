@@ -238,7 +238,7 @@ function Bracket({ matches }: { matches: BracketMatch[] }) {
 
 function ArenaGame({ tournament }: { tournament: Tournament }) {
   const { user } = useAuth();
-  const players = tournament.participants.map((p) => ({ ...p.user, role: 'PLAYER' as const, managed: false, mustChangePassword: false, chessComUsername: null, lichessUsername: null, ratings: {} as User['ratings'] }));
+  const players = tournament.participants.map((p) => ({ ...p.user, role: 'PLAYER' as const, managed: false, enabled: true, mustChangePassword: false, chessComUsername: null, lichessUsername: null, ratings: {} as User['ratings'] }));
   const [white, setWhite] = useState<number | ''>(user?.id ?? '');
   const [black, setBlack] = useState<number | ''>('');
   const [result, setResult] = useState<GameResult | ''>('');
