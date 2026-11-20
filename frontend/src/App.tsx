@@ -23,7 +23,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
-  if (loading) return <Loading label="Henter økten din" />;
+  if (loading) return <div className="grid min-h-dvh place-items-center"><Loading label="Henter økten din" /></div>;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   if (user.mustChangePassword && location.pathname !== '/change-password') return <Navigate to="/change-password" replace />;
   return <>{children}</>;

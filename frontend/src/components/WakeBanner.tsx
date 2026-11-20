@@ -10,7 +10,7 @@ export function WakeBanner({ client = api }: { client?: ApiClient }) {
   useEffect(() => client.onWakingChange(setWaking), [client]);
   if (!waking) return null;
   return (
-    <div role="status" className="fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-3">
+    <div role="status" className="fixed inset-x-0 bottom-0 z-50 flex justify-center px-3 pb-4">
       <p className="rounded-md bg-spruce px-4 py-2.5 text-sm text-snow shadow-lg">
         Serveren våkner etter en pause. Det kan ta opptil to minutter – siden fortsetter av seg selv.
       </p>

@@ -97,6 +97,9 @@ From now on Render redeploys on every push to the default branch that touches `b
 
 1. Open the site. The first request may show **"Serveren våkner…"** while Render starts the backend.
 2. Log in with the bootstrap admin. You are taken straight to **choose a new password**.
+
+   ![The login page](images/login.png)
+
 3. In Render, **delete** `SJAKKPORTAL_ADMIN_USERNAME` and `SJAKKPORTAL_ADMIN_PASSWORD`. They are only
    read when no admin exists, but there is no reason to keep a password lying around.
 4. **Admin → Invitasjoner → Ny invitasjon**: create a code with as many uses as family members and an
@@ -123,6 +126,9 @@ messages, and starts it again on the next request.
 - **What users see.** The browser shows "Serveren våkner etter en pause…" and polls `/api/ping` for up
   to three minutes. Then it repeats what the page was loading. Vercel waits up to 120 seconds for the
   backend, so a long wake-up can show one gateway error first; the app treats that the same way and keeps waiting.
+
+  ![The wake-up banner at the bottom of the page while the backend starts](images/waking-up.png)
+
 - **Writes are never repeated automatically.** If a save button was what woke the server, the user
   sees `CHESS-CLIENT-004` and presses it again. Nothing is saved twice.
 - **Keeping it awake.** An open page with live updates (TV mode, a live game) sends WebSocket

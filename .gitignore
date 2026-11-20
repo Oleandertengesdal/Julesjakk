@@ -21,3 +21,4 @@ frontend/dist/
 # Copied from node_modules on npm install
 frontend/public/stockfish/
 frontend/*.tsbuildinfo
+.mac.sums

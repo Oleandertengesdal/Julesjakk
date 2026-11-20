@@ -5,8 +5,9 @@ import { PlayerPicker } from '../components/PlayerPicker';
 import { Button, ErrorNotice, Loading, PlayerLink, SelectField } from '../components/ui';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { CATEGORY_LABEL, decimal, DRAW_RESOLUTION_LABEL, formatDateTime, FORMAT_LABEL, resultMark, STATUS_LABEL, TOURNAMENT_STATUS_LABEL } from '../lib/format';
+import { CATEGORY_LABEL, decimal, DRAW_RESOLUTION_LABEL, formatDateTime, FORMAT_LABEL, TOURNAMENT_STATUS_LABEL } from '../lib/format';
 import { useTopic } from '../lib/live';
+import { pairingLabel } from '../lib/pairing';
 import { useApi } from '../lib/useApi';
 import type { BracketMatch, GameResult, Pairing, Round, Standing, Tournament, User } from '../lib/types';
 
@@ -123,7 +124,7 @@ function Standings({ tournament, knockout }: { tournament: Tournament; knockout:
     <section aria-labelledby="tabell">
       <h2 id="tabell" className="mb-3 text-xl font-extrabold text-spruce">Tabell</h2>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm tabular">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b-2 border-spruce text-left">
               <th className="py-2 pr-2 font-semibold">#</th>
@@ -141,13 +142,13 @@ function Standings({ tournament, knockout }: { tournament: Tournament; knockout:
           <tbody className="divide-y divide-mist">
             {tournament.standings.map((row: Standing) => (
               <tr key={row.user.id} className={row.eliminated ? 'text-slate' : ''}>
-                <td className="py-2 pr-2 font-extrabold text-walnut">{row.rank}</td>
+                <td className="tabular py-2 pr-2 font-extrabold text-walnut">{row.rank}</td>
                 <td className="py-2 pr-2"><PlayerLink player={row.user} />{row.eliminated && <span className="ml-2 text-xs">ute</span>}</td>
-                <td className="py-2 pr-2 text-right text-base font-extrabold">{score(row.score)}</td>
-                <td className="py-2 pr-2 text-right">{row.wins}-{row.draws}-{row.losses}</td>
+                <td className="tabular py-2 pr-2 text-right text-base font-extrabold">{score(row.score)}</td>
+                <td className="tabular py-2 pr-2 text-right">{row.wins}-{row.draws}-{row.losses}</td>
                 {!knockout && !arena && <>
-                  <td className="py-2 pr-2 text-right">{score(row.headToHead)}</td>
-                  <td className="py-2 pr-2 text-right">{score(row.buchholz)}</td>
+                  <td className="tabular py-2 pr-2 text-right">{score(row.headToHead)}</td>
+                  <td className="tabular py-2 pr-2 text-right">{score(row.buchholz)}</td>
                   <td className="py-2 text-right">{decimal(row.sonnebornBerger)}</td>
                 </>}
                 {arena && <td className="py-2 text-right">{row.onFire ? <span className="font-extrabold text-berry" title="Dobbelt poeng">{row.streak} på rad</span> : row.streak || ''}</td>}
@@ -166,13 +167,12 @@ function PairingRow({ pairing }: { pairing: Pairing }) {
   if (pairing.bye) {
     return <li className="py-2 text-slate"><PlayerLink player={pairing.white} /> står over denne runden</li>;
   }
-  const label = game ? (game.status === 'FINISHED' || game.status === 'PENDING' ? resultMark(game.result) : STATUS_LABEL[game.status]) : '';
-  const tieBreaks = pairing.games.length > 1 ? ` (${pairing.games.length} partier)` : '';
+  const label = pairingLabel(pairing);
   return (
     <li>
       <Link to={game ? `/matches/${game.id}` : '#'} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 py-2 hover:bg-white">
         <span className={`truncate text-right ${pairing.advancing?.id === pairing.white?.id ? 'font-extrabold' : ''}`}>{pairing.white?.displayName}</span>
-        <span className={`min-w-20 text-center text-sm font-semibold ${game?.status === 'LIVE' ? 'text-berry' : game?.status === 'SCHEDULED' ? 'text-slate' : ''}`}>{label}{tieBreaks}</span>
+        <span className={`min-w-20 text-center text-sm font-semibold ${game?.status === 'LIVE' ? 'text-berry' : game?.status === 'SCHEDULED' ? 'text-slate' : ''}`}>{label}</span>
         <span className={`truncate ${pairing.advancing?.id === pairing.black?.id ? 'font-extrabold' : ''}`}>{pairing.black?.displayName}</span>
       </Link>
     </li>

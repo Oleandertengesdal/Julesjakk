@@ -167,6 +167,11 @@ sequenceDiagram
   3. the featured game after it ends;
   4. the latest finished game.
 
+![TV mode following a live game](images/tv-mode.png)
+
+*TV mode.* It subscribes to `/topic/tv`, so it switches by itself when a new game starts. The
+evaluation bar on the left comes from Stockfish running on the TV's own browser.
+
 *Scaling note:* the simple in-memory broker means all WebSocket clients must reach the same
 instance. Several instances would need a STOMP relay (RabbitMQ, ActiveMQ).
 
@@ -210,6 +215,11 @@ flowchart LR
   left where it can be taken for less) that keeps the mover at ≥ 50 %.
 - **Turning points** are moves that swing the win chance by at least 8 percentage points.
 - **Live evaluation** in TV mode and on live games runs the same engine at a lower depth, on the viewer's device.
+
+![A finished game with its analysis](images/game-analysis.png)
+
+*The saved analysis of a game.* Each move has a grade symbol (★ best, !! brilliant, ?! inaccuracy,
+? mistake). Below the board and moves are the turning points and the win-chance graph.
 
 ## Elo ratings
 
@@ -275,6 +285,10 @@ Lifecycle: **DRAFT** (sign-up) → **ACTIVE** → **FINISHED**, or **CANCELLED**
 | Swiss | `SwissPairer` | Depth-first backtracking over the ranking. Hard rules: no rematches, at most one bye each, never the same colour three times in a row. Preferences: equal scores, top half v bottom half, colour balance. Up to 30 rounds |
 | Single / double elimination | `EliminationBracket` | Standard seeding (top two seeds can only meet in the final), byes for top seeds. Double elimination has a losers bracket and a grand-final reset |
 | Arena | `ArenaScoring` | Players register games freely during the arena window. Win 2, draw 1, loss 0; from the third consecutive win each game scores double until a non-win (which still scores double) |
+
+| Swiss standings | Knockout bracket |
+|---|---|
+| ![Swiss tournament standings](images/tournament-swiss.png) | ![Knockout bracket with a playoff after a draw](images/tournament-knockout.png) |
 
 **Standings** (all formats except arena): score, then head-to-head among the tied players, then
 Buchholz, then Sonneborn-Berger. Players still level share a rank. Points are counted in half-points

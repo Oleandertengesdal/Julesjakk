@@ -11,6 +11,8 @@ during or after play. The opponent confirms the result, and only then does it co
 (kept separately for blitz, rapid and classical). Stockfish runs in the browser to analyse finished games.
 A living-room TV shows the game in progress, and tournaments pair themselves.
 
+![Sjakkportal on a laptop and a phone: a finished game with Stockfish's move grades, and a live game](docs/images/hero.png)
+
 The interface is in Norwegian (bokmål); code and documentation are in English.
 
 > Replace `OWNER/REPO` in the badge above with the GitHub path once the repository is pushed.
@@ -38,6 +40,30 @@ The interface is in Norwegian (bokmål); code and documentation are in English.
 - **Accounts**:
   - Invite codes (no open sign-up) and short-lived refresh-token sessions with reuse detection.
   - Admin password resets, and "managed" players without a login (for the youngest).
+
+## Screenshots
+
+The screenshots show a seeded family with three months of games. The interface text is Norwegian.
+
+| | |
+|---|---|
+| ![Home page with the live game, results waiting for confirmation and leaderboards](docs/images/home.png) | ![A finished game with Stockfish analysis: accuracy, move grades, turning points and the evaluation graph](docs/images/game-analysis.png) |
+| **Home.** The live game, results waiting for you, recent games and leaderboards per category | **Analysis.** Stockfish in the browser: accuracy per player, a grade for every move, turning points and the evaluation graph |
+| ![Registering a game: players, result, time control and category](docs/images/register-game.png) | ![A game being entered move by move](docs/images/live-game.png) |
+| **Register a game.** Result only, a pasted PGN, or the moves entered as you play. The time control decides the rating category | **Live game.** Moves are checked on the server and sent to every viewer at once. Below the board: the head-to-head record |
+| ![Player profile with ratings per category, rating history, results and badges](docs/images/player-profile.png) | ![Swiss tournament standings with tie-breaks and rounds](docs/images/tournament-swiss.png) |
+| **Profile.** A rating for each category, rating history, streaks, nemesis, accuracy and badges | **Swiss tournament.** Standings with head-to-head, Buchholz and Sonneborn-Berger tie-breaks; rounds pair themselves |
+| ![Knockout bracket with a drawn match going to a blitz playoff](docs/images/tournament-knockout.png) | ![Admin page listing every result that waits for confirmation](docs/images/admin-pending.png) |
+| **Knockout.** The bracket fills in as results are confirmed. A drawn match here goes to a blitz playoff | **Admin.** Every unconfirmed result in one place, plus invites, passwords and players without a login |
+
+**TV mode** (`/tv`) for the living room: the live game full-screen with an evaluation bar, and the
+tournament standings along the bottom.
+
+![TV mode: a large board, players, move number and the tournament ticker](docs/images/tv-mode.png)
+
+**On the phone**, where most results are registered: home, registering a draw, and following a live game.
+
+![Three phone screens: home, registering a game, and a live game](docs/images/phone.png)
 
 ## Architecture
 
@@ -110,7 +136,7 @@ to create an invite code for the family.
 
 ```bash
 cd backend && ./gradlew test             # 774 tests against the PostgreSQL from docker compose
-cd frontend && npm test                  # 68 tests, including the engine driver against real Stockfish
+cd frontend && npm test                  # 72 tests, including the engine driver against real Stockfish
 cd frontend && npm run build             # type-check and production build
 ```
 
