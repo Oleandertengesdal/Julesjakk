@@ -118,6 +118,10 @@ Token buckets (Bucket4j) in memory. Limits are configured in `application.yml` u
 | Password reset with a link | client address | 5 per minute |
 | Game submission | user | 30 per minute |
 
+Chess clock presses (`PUT /api/games/{id}/clock`) are deliberately not limited: a fast game can
+need several presses per second. Only the two players and admins can press, only while the game is
+live, and each press replaces a single row.
+
 Exceeding a limit returns 429 `CHESS-RATE-001` with `Retry-After`. The store holds at most 10 000
 buckets (least recently used are dropped) so it cannot grow without bound. A restart resets the
 limits; with several instances each would count separately.
@@ -201,6 +205,8 @@ Admin actions are written to `audit_log` with the actor, target and request trac
 - accounts disabled and enabled;
 - managed players created;
 - games registered, reported, finished or confirmed by an admin;
+- results corrected (`GAME_CORRECTED`) and games annulled (`GAME_ANNULLED`), with the old and new
+  result and the admin's reason;
 - tournaments created, started, finished and cancelled.
 
 Logins and players' own actions are not audited; the games, ratings and tokens tables already record who did what.

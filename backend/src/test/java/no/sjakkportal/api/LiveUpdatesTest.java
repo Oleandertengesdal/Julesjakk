@@ -145,6 +145,27 @@ class LiveUpdatesTest extends ApiIntegrationTest {
         assertThat(await(updates, m -> m.at("/game/plyCount").asInt() == 2).at("/game/moves/1/san").asText()).isEqualTo("e5");
     }
 
+    /** The TV and spectators show the clock the phone at the board is running. */
+    @Test
+    void clockPressesReachTheGamePageAndTheTv() throws Exception {
+        MvcResult started = mvc.perform(as(jsonPost("/api/games/live", Map.of("whiteId", kari, "blackId", ola, "timeControl", "5+3")),
+                adminToken)).andReturn();
+        long game = body(started).get("id").asLong();
+        StompSession session = connect(kariToken);
+        BlockingQueue<JsonNode> page = subscribe(session, "/topic/games/" + game);
+        BlockingQueue<JsonNode> tv = subscribe(session, "/topic/tv");
+
+        mvc.perform(as(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/games/" + game + "/clock")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"whiteMs\":297000,\"blackMs\":300000,\"running\":\"BLACK\",\"sequence\":2}"), kariToken));
+
+        JsonNode onPage = await(page, m -> m.at("/game/clock/sequence").asInt() == 2);
+        assertThat(onPage.at("/game/clock/running").asText()).isEqualTo("BLACK");
+        assertThat(onPage.at("/game/clock/whiteMs").asLong()).isEqualTo(297_000);
+        JsonNode onTv = await(tv, m -> m.at("/game/clock/sequence").asInt() == 2);
+        assertThat(onTv.at("/game/clock/blackMs").asLong()).isEqualTo(300_000);
+    }
+
     @Test
     void rejectedMovesAreNeverBroadcast() throws Exception {
         long game = startLive(kari, ola);

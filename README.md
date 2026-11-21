@@ -1,6 +1,6 @@
 # Sjakkportal
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/oleandertengesdal/julesjakk/actions/workflows/ci.yml/badge.svg)](https://github.com/oleandertengesdal/julesjakk/actions/workflows/ci.yml)
 ![Java 21](https://img.shields.io/badge/Java-21-17332b)
 ![Spring Boot 3.5](https://img.shields.io/badge/Spring%20Boot-3.5-2e7a57)
 ![React 19](https://img.shields.io/badge/React-19-6e4b32)
@@ -15,8 +15,6 @@ A living-room TV shows the game in progress, and tournaments pair themselves.
 
 The interface is in Norwegian (bokmål); code and documentation are in English.
 
-> Replace `OWNER/REPO` in the badge above with the GitHub path once the repository is pushed.
-
 ## Features
 
 - **Games**:
@@ -24,12 +22,16 @@ The interface is in Norwegian (bokmål); code and documentation are in English.
   - A result registered by a player stays *pending* until the opponent confirms it; an admin can register or confirm any game.
   - Separate Elo ratings for blitz, rapid and classical.
   - Each player sees what they stand to win, draw or lose before a game.
+  - An admin can correct a confirmed result or annul a game, with a reason. Ratings are recomputed as
+    if the right result had been registered from the start ([how](docs/ARCHITECTURE.md#result-corrections)).
+- **Chess clock**: a phone at the board becomes the clock. Its time counts down live on the game page
+  and the TV, and when a flag falls it offers to register the loss on time ([how](docs/ARCHITECTURE.md#chess-clock)).
 - **Analysis**:
   - Stockfish 19 (WebAssembly) runs in a Web Worker on the viewer's device.
   - The analysis gives accuracy per player, move grades (brilliant → blunder), the turning points and an evaluation graph.
   - It is saved, so each game only needs analysing once.
-- **TV mode** (`/tv`): a full-screen board for the living room that follows the live game over WebSocket.
-  Press F for full screen and E for the evaluation bar.
+- **TV mode** (`/tv`): a full-screen board for the living room that follows the live game over WebSocket,
+  with both clocks when a phone is used as the chess clock. Press F for full screen and E for the evaluation bar.
 - **Tournaments**:
   - Formats: round-robin (single or double), Swiss, single and double elimination, and arena.
   - Draws in knockout games are settled by a per-tournament rule: replay, a blitz playoff with armageddon, or straight armageddon.
@@ -55,6 +57,8 @@ The screenshots show a seeded family with three months of games. The interface t
 | **Profile.** A rating for each category, rating history, streaks, nemesis, accuracy and badges | **Swiss tournament.** Standings with head-to-head, Buchholz and Sonneborn-Berger tie-breaks; rounds pair themselves |
 | ![Knockout bracket with a drawn match going to a blitz playoff](docs/images/tournament-knockout.png) | ![Admin page listing every result that waits for confirmation](docs/images/admin-pending.png) |
 | **Knockout.** The bracket fills in as results are confirmed. A drawn match here goes to a blitz playoff | **Admin.** Every unconfirmed result in one place, plus invites, passwords and players without a login |
+| ![The phone as a chess clock: two halves, the top one turned for the opponent](docs/images/chess-clock.png) | ![A corrected result with the admin's reason, and the panel for correcting or annulling](docs/images/result-correction.png) |
+| **Chess clock.** The phone at the board runs the clock; each press shows on the game page and the TV at once | **Correcting a result.** The admin gives a reason, everyone sees it, and the ratings are recomputed from the first game |
 
 **TV mode** (`/tv`) for the living room: the live game full-screen with an evaluation bar, and the
 tournament standings along the bottom.
@@ -135,8 +139,9 @@ to create an invite code for the family.
 ### Tests
 
 ```bash
-cd backend && ./gradlew test             # 1086 tests against the PostgreSQL from docker compose
-cd frontend && npm test                  # 75 tests, including the engine driver against real Stockfish
+cd backend && ./gradlew test             # 1129 tests against the PostgreSQL from docker compose
+cd frontend && npm test                  # 227 tests, including the engine driver against real Stockfish
+cd frontend && npm run coverage          # the same, with coverage; fails below 93 % of lines
 cd frontend && npm run build             # type-check and production build
 ```
 

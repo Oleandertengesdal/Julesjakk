@@ -49,6 +49,15 @@ public class Game {
     @Column(name = "rejection_reason")
     String rejectionReason;
 
+    @Column(name = "corrected_by")
+    Long correctedBy;
+
+    @Column(name = "corrected_at")
+    Instant correctedAt;
+
+    @Column(name = "correction_reason")
+    String correctionReason;
+
     @Enumerated(EnumType.STRING)
     GameResult result;
 

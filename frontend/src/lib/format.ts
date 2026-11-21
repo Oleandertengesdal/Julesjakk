@@ -3,7 +3,7 @@ import type { Category, GameResult, GameStatus, Termination, TournamentFormat, T
 export const CATEGORY_LABEL: Record<Category, string> = { BLITZ: 'Lyn', RAPID: 'Hurtig', CLASSICAL: 'Langsjakk' };
 
 export const STATUS_LABEL: Record<GameStatus, string> = {
-  SCHEDULED: 'Ikke spilt', LIVE: 'Pågår', PENDING: 'Venter på bekreftelse', REJECTED: 'Avvist', FINISHED: 'Ferdig', ABORTED: 'Avbrutt',
+  SCHEDULED: 'Ikke spilt', LIVE: 'Pågår', PENDING: 'Venter på bekreftelse', REJECTED: 'Avvist', FINISHED: 'Ferdig', ABORTED: 'Avbrutt', ANNULLED: 'Annullert',
 };
 
 export const TERMINATION_LABEL: Record<Termination, string> = {

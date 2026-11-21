@@ -1,3 +1,4 @@
+import { PlayerClock } from '../components/ViewerClock';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useLiveEval } from '../analysis/useLiveEval';
@@ -70,10 +71,12 @@ export default function TvPage() {
                   {', '}{CATEGORY_LABEL[game.category]}{game.timeControl ? ` ${game.timeControl}` : ''}
                 </p>
                 <PlayerBlock name={game.black.displayName} rating={tv.data?.blackRating} pieces={captured.byBlack} advantage={-captured.balance} toMove={game.status === 'LIVE' && fen.split(' ')[1] === 'b'} />
+                {game.clock && <div className="mt-[1vh] pl-[2.6vh]"><PlayerClock clock={game.clock} side="BLACK" size="xl" /></div>}
                 <p className="my-[2vh] text-[9vh] font-extrabold leading-none tabular text-birch">
                   {game.status === 'LIVE' ? `Trekk ${moveNumber || 1}` : resultMark(game.result)}
                 </p>
                 <PlayerBlock name={game.white.displayName} rating={tv.data?.whiteRating} pieces={captured.byWhite} advantage={captured.balance} toMove={game.status === 'LIVE' && fen.split(' ')[1] === 'w'} />
+                {game.clock && <div className="mt-[1vh] pl-[2.6vh]"><PlayerClock clock={game.clock} side="WHITE" size="xl" /></div>}
                 {game.status !== 'LIVE' && game.termination && <p className="mt-[2vh] text-[2.4vh] text-birch">Avgjort ved {TERMINATION_LABEL[game.termination]}</p>}
               </div>
               {last && <p className="text-[3vh] text-birch">Siste trekk <span className="font-extrabold text-snow">{last.san}</span></p>}

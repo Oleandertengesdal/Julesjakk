@@ -9,5 +9,7 @@ public enum GameStatus {
     REJECTED,
     /** Confirmed; ratings and standings include it. */
     FINISHED,
-    ABORTED
+    ABORTED,
+    /** Confirmed once, then annulled by an admin: kept for the record, counted nowhere. */
+    ANNULLED
 }

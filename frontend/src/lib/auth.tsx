@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api, type SessionResponse } from './api';
 import type { User } from './types';
 
-interface AuthState {
+export interface AuthState {
   user: User | null;
   loading: boolean;
   login(username: string, password: string): Promise<User>;
@@ -10,7 +10,8 @@ interface AuthState {
   reload(): Promise<void>;
 }
 
-const AuthContext = createContext<AuthState | null>(null);
+/** Exported so tests can provide a signed-in user without a server. */
+export const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);

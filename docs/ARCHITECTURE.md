@@ -81,6 +81,7 @@ Flyway owns the schema (`backend/src/main/resources/db/migration`); Hibernate on
 | `app_user` | Role, `managed` flag (no login), BCrypt hash, `token_version` (bumped to revoke all access tokens), linked online usernames (unique, case-insensitive) |
 | `player_rating` | One row per user and category (BLITZ, RAPID, CLASSICAL): rating, rated-game count |
 | `rating_history` | Every rating change, with game and category |
+| `game_clock` | The chess clock of a live game: both players' remaining time, which side runs, a sequence number and when it was last pressed |
 | `game` | Players, status, result, category, time control, PGN, `registered_by`, `confirmed_by`, `client_request_id` (idempotency), `external_id` (imports), tournament pairing and stage |
 | `game_move` | Moves of live-entered games, one row per ply |
 | `game_analysis` | Saved Stockfish summary (accuracies, per-move grades as JSONB) |
@@ -107,7 +108,10 @@ stateDiagram-v2
   LIVE --> ABORTED: abort
   PENDING --> FINISHED: opponent or admin confirms
   PENDING --> REJECTED: opponent rejects / reporter withdraws
+  FINISHED --> FINISHED: admin corrects the result
+  FINISHED --> ANNULLED: admin annuls
   FINISHED --> [*]
+  ANNULLED --> [*]
   REJECTED --> [*]
   ABORTED --> [*]
 ```
@@ -221,6 +225,32 @@ flowchart LR
 *The saved analysis of a game.* Each move has a grade symbol (★ best, !! brilliant, ?! inaccuracy,
 ? mistake). Below the board and moves are the turning points and the win-chance graph.
 
+## Chess clock
+
+A phone at the board can act as the chess clock (`/matches/{id}/klokke`). Its time shows on the game
+page and on the TV.
+
+- **The phone is authoritative.** The clock runs on the phone, so it keeps working through a bad
+  connection. After every press, pause or resume, the phone sends a snapshot to
+  `PUT /api/games/{id}/clock`: `whiteMs`, `blackMs`, `running` (`WHITE`, `BLACK` or none) and an
+  increasing `sequence`.
+- **Latest wins.** The server stores a snapshot only if its sequence is higher than the stored one
+  (`ON CONFLICT … WHERE game_clock.sequence < EXCLUDED.sequence`). A delayed or repeated snapshot is
+  refused with `CHESS-GAME-005`; the phone drops it, because a newer one is already on its way. Other
+  failures are retried every two seconds, and the phone shows that the clock is not saved yet.
+- **Viewers count down without trusting their own clock.** Every game view carries `clock.updatedAt`
+  and `clock.serverNow`. A viewer computes the running side's remaining time as
+  `ms − (serverNow − updatedAt) − (time since the view arrived)`. So a TV whose clock is minutes off
+  still shows the right time.
+- **Each press is broadcast** on `/topic/games/{id}` and `/topic/tv`, like a move.
+- **Who may press.** The two players and admins, only while the game is LIVE and only if it has a time
+  control. Clock presses are not rate-limited: a bullet game can need several per second.
+- **When the game ends.** As soon as a game leaves LIVE, the server stops its clock and books the
+  time used since the last press, so the stored clock shows the time at the end. When a flag falls,
+  the phone offers to register a loss on time (`TIMEOUT`); it never does so on its own.
+- **Increment.** Fischer increment, added to a player's time when they press after their move.
+  Black's first press starts White's clock, as on a physical clock.
+
 ## Elo ratings
 
 Every player has three independent ratings: blitz, rapid and classical. A game's category comes from
@@ -267,6 +297,34 @@ produce a negative probability.
 
 **Concurrency.** Rating rows for both players are locked in user-id order before reading, so two
 confirmations involving the same player never interleave and never deadlock.
+
+## Result corrections
+
+An admin can correct the result of a FINISHED game, or annul it
+(`POST /api/admin/games/{id}/correct` and `/annul`). Both need a reason of up to 300 characters.
+
+- **Ratings are recomputed by replay.** Elo depends on order: changing one result changes every
+  later game's expected score in that category. So the correction replays every FINISHED, rated
+  game of the category in its original rating order (the first `rating_history` row of each game).
+  It writes a fresh rating history with the original timestamps and new rating changes on each
+  game. It then rebuilds `player_rating`. The result is exactly what the ratings would have been if
+  the right result had been registered from the start, which a test checks against a parallel family.
+  Other categories are not touched. An unrated game is corrected without any replay.
+- **Locking.** The replay locks `player_rating` and then `rating_history` in exclusive mode, so no
+  confirmation can rate a game in the middle of a replay. A replay reads every rated game in the
+  category, which is cheap at a family's scale.
+- **An annulled game** gets status ANNULLED. It keeps its moves, is removed from the TV, and no
+  longer counts in ratings, statistics, streaks or badges.
+- **Tournament games:**
+  - **Knockout:** a result decides who goes through, and later rounds may already be paired. So
+    neither correction nor annulment is allowed (`CHESS-GAME-010`).
+  - **Round-robin and Swiss:** the result is updated in the pairing and the standings recomputed.
+    Annulling is refused, because the round would be left with a hole.
+  - **Arena:** both are allowed, and the standings recomputed.
+- **Checks.** If the game has moves and they end in checkmate or stalemate, the new result must
+  agree with the board (`CHESS-PGN-004`).
+- **Visible to everyone.** The game page shows who corrected or annulled the game, when, and why.
+  The audit log records `GAME_CORRECTED` or `GAME_ANNULLED` with the old and new result and the reason.
 
 ## Tournaments
 
@@ -342,7 +400,12 @@ The code was written test-first.
   - every foreign key is indexed;
   - the documentation lists every environment variable.
 
-**Frontend** (Vitest):
+**Frontend** (Vitest and Testing Library):
 - The API client: token refresh, error mapping, cold-start waiting.
 - The UCI parser, the evaluation maths, and the engine driver against the real Stockfish build.
-- Auth pages and error screens.
+- The chess clock logic: presses, increment, pause and flag fall, and the countdown viewers show.
+- Every page and component, rendered in jsdom with the API, the WebSocket and Stockfish replaced by
+  fakes (`src/test/`). The tests click through pages as a user would, using labels and roles. They
+  check what is sent to the API and what the page shows afterwards, including errors.
+- `npm run coverage` measures coverage and fails below the thresholds in `vite.config.ts`
+  (93 % of lines); CI runs it on every push and keeps the HTML report.

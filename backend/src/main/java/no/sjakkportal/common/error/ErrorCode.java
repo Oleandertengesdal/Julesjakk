@@ -85,6 +85,8 @@ public enum ErrorCode {
             "Bare spillerne i partiet eller en administrator kan gjøre dette."),
     GAME_SELF_CONFIRMATION("CHESS-GAME-008", HttpStatus.FORBIDDEN, "The player who registered a result cannot confirm it",
             "Motstanderen din eller en administrator må bekrefte partiet."),
+    GAME_CORRECTION_NOT_ALLOWED("CHESS-GAME-010", HttpStatus.CONFLICT, "This result cannot be corrected",
+            "Resultatet kan ikke endres her: det avgjorde en utslagskamp, eller partiet hører til en turneringsrunde."),
     GAME_INVALID_TIME_CONTROL("CHESS-GAME-009", HttpStatus.UNPROCESSABLE_ENTITY, "Time control invalid or inconsistent with the category",
             "Tidskontrollen er ugyldig eller passer ikke med valgt kategori."),
 

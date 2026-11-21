@@ -1,8 +1,9 @@
+import type { ServerClock } from './clock';
 /** Shapes returned by the Sjakkportal API. */
 
 export type Category = 'BLITZ' | 'RAPID' | 'CLASSICAL';
 export type GameResult = 'WHITE_WIN' | 'BLACK_WIN' | 'DRAW';
-export type GameStatus = 'SCHEDULED' | 'LIVE' | 'PENDING' | 'REJECTED' | 'FINISHED' | 'ABORTED';
+export type GameStatus = 'SCHEDULED' | 'LIVE' | 'PENDING' | 'REJECTED' | 'FINISHED' | 'ABORTED' | 'ANNULLED';
 export type Termination =
   | 'CHECKMATE' | 'RESIGNATION' | 'TIMEOUT' | 'STALEMATE' | 'THREEFOLD_REPETITION' | 'FIFTY_MOVE_RULE'
   | 'INSUFFICIENT_MATERIAL' | 'AGREEMENT' | 'FORFEIT' | 'UNKNOWN';
@@ -53,6 +54,8 @@ export interface Game {
   blackRatingDelta?: number;
   pgn?: string;
   moves: Move[];
+  correction?: { reason: string; by: PlayerRef; at: string };
+  clock?: ServerClock;
 }
 
 export interface GameListItem {

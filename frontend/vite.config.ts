@@ -19,5 +19,13 @@ export default defineConfig({
     css: false,
     // The engine test starts the real Stockfish build in Node and needs more time than a unit test.
     testTimeout: 30_000,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/main.tsx', 'src/test/**', 'src/**/*.test.{ts,tsx}', 'src/vite-env.d.ts', 'src/lib/types.ts'],
+      reporter: ['text-summary', 'text', 'html'],
+      // CI fails if coverage drops below these. Raise them as coverage grows; never lower them silently.
+      thresholds: { lines: 93, statements: 90, functions: 85, branches: 85 },
+    },
   },
 });

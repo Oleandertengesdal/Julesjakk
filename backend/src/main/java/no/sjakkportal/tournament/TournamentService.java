@@ -311,6 +311,31 @@ public class TournamentService {
         changed(tournamentId);
     }
 
+    /**
+     * An admin is correcting or annulling a tournament game. Knockout results that decided a match
+     * cannot change (the bracket has moved on); a paired round-robin or Swiss game can have its result
+     * corrected but not be annulled (its round would have a hole); arena games may do either.
+     */
+    @EventListener
+    public void onGameCorrected(no.sjakkportal.game.GameCorrectedEvent event) {
+        Game game = event.game();
+        if (game.getTournamentPairingId() == null) {
+            return;
+        }
+        long tournamentId = jdbc.sql("""
+                        SELECT r.tournament_id FROM tournament_pairing p JOIN tournament_round r ON r.id = p.round_id WHERE p.id = ?""")
+                .param(game.getTournamentPairingId()).query(Long.class).single();
+        TournamentRow tournament = lock(tournamentId);
+        TournamentFormat format = tournament.formatEnum();
+        boolean knockout = format == TournamentFormat.SINGLE_ELIMINATION || format == TournamentFormat.DOUBLE_ELIMINATION;
+        if (knockout || (event.annulled() && format != TournamentFormat.ARENA)) {
+            throw new ChessException(ErrorCode.GAME_CORRECTION_NOT_ALLOWED);
+        }
+        jdbc.sql("UPDATE tournament_pairing SET result = ?, version = version + 1 WHERE id = ? AND game_id = ?")
+                .params(event.annulled() ? null : event.newResult().name(), game.getTournamentPairingId(), game.getId()).update();
+        changed(tournamentId);
+    }
+
     private void completeRoundIfDone(TournamentRow tournament) {
         RoundRow round = jdbc.sql("SELECT id, bracket, round_number, status FROM tournament_round "
                         + "WHERE tournament_id = ? AND round_number = ? AND bracket = 'MAIN'")

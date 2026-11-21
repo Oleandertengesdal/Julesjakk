@@ -73,6 +73,7 @@ class AccessControlMatrixTest extends ApiIntegrationTest {
             new Endpoint("POST", "/api/games/{id}/moves", Access.PLAYER, Map.of("move", "e4", "expectedPly", 0)),
             new Endpoint("POST", "/api/games/{id}/finish", Access.PLAYER, Map.of("result", "DRAW")),
             new Endpoint("POST", "/api/games/{id}/abort", Access.PLAYER, null),
+            new Endpoint("PUT", "/api/games/{id}/clock", Access.PLAYER, Map.of("whiteMs", 1000, "blackMs", 1000, "sequence", 1)),
             new Endpoint("POST", "/api/games/{id}/start", Access.PLAYER, null),
             new Endpoint("POST", "/api/games/{id}/report", Access.PLAYER, Map.of("result", "DRAW")),
             new Endpoint("GET", "/api/games/{id}/analysis", Access.PLAYER, null),
@@ -99,6 +100,8 @@ class AccessControlMatrixTest extends ApiIntegrationTest {
             new Endpoint("GET", "/api/admin/games/pending", Access.ADMIN, null),
             new Endpoint("POST", "/api/admin/games/{id}/feature", Access.ADMIN, Map.of("featured", true)),
             new Endpoint("GET", "/api/admin/diagnostics/request", Access.ADMIN, null),
+            new Endpoint("POST", "/api/admin/games/{id}/correct", Access.ADMIN, Map.of("result", "DRAW", "reason", "x")),
+            new Endpoint("POST", "/api/admin/games/{id}/annul", Access.ADMIN, Map.of("reason", "x")),
             new Endpoint("GET", "/api/tv", Access.PLAYER, null),
             new Endpoint("GET", "/api/ping", Access.PUBLIC, null),
             new Endpoint("GET", "/actuator/health", Access.PUBLIC, null));

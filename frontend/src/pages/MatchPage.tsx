@@ -1,5 +1,7 @@
+import { PlayerClock } from '../components/ViewerClock';
+import { CorrectionNote, CorrectionPanel } from '../components/Correction';
 import { Chess, type Square } from 'chess.js';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { winPercent } from '../analysis/evaluation';
@@ -46,13 +48,14 @@ export default function MatchPage() {
       {game.status === 'SCHEDULED' && <Scheduled game={game} canAct={canAct} onChange={setGame} />}
       {game.status === 'LIVE' && <Live game={game} canAct={canAct} onChange={setGame} onConflict={reload} />}
       {game.status === 'PENDING' && <Pending game={game} userId={user.id} isAdmin={isAdmin} canAct={canAct} onChange={setGame} />}
-      {(game.status === 'FINISHED' || game.status === 'PENDING' || game.status === 'REJECTED' || game.status === 'ABORTED') && game.plyCount > 0 && (
+      {(game.status === 'FINISHED' || game.status === 'PENDING' || game.status === 'REJECTED' || game.status === 'ABORTED' || game.status === 'ANNULLED') && game.plyCount > 0 && (
         <Recap game={game} canSave={canAct} />
       )}
       {isAdmin && (game.status === 'LIVE' || game.status === 'SCHEDULED') && (
         <FeatureToggle game={game} onChange={setGame} />
       )}
-      {game.status !== 'SCHEDULED' && <Preview gameId={game.id} />}
+      {isAdmin && game.status === 'FINISHED' && <CorrectionPanel game={game} onChange={setGame} />}
+      {game.status !== 'SCHEDULED' && <Preview gameId={game.id} version={`${game.status}|${game.result ?? ''}|${game.correction?.at ?? ''}`} />}
     </div>
   );
 }
@@ -86,12 +89,21 @@ function MatchHeader({ game }: { game: Game }) {
       {game.termination && game.result && <p className="mt-1 text-center text-slate">Avgjort ved {TERMINATION_LABEL[game.termination]}</p>}
       {game.comment && <p className="mx-auto mt-3 max-w-prose text-center italic text-slate">«{game.comment}»</p>}
       {game.rejectionReason && <p className="mt-3 text-center text-berry">Avvist: {game.rejectionReason}</p>}
+      <CorrectionNote game={game} />
     </header>
   );
 }
 
-function Preview({ gameId }: { gameId: number }) {
+/** The matchup card. Reloads when the game's outcome changes, since a confirmation or a correction moves the ratings it shows. */
+function Preview({ gameId, version }: { gameId: number; version: string }) {
   const preview = useApi<Matchup>(`/api/games/${gameId}/preview`);
+  const shown = useRef(version);
+  const { reload } = preview;
+  useEffect(() => {
+    if (shown.current === version) return;
+    shown.current = version;
+    void reload();
+  }, [version, reload]);
   return preview.data ? <MatchupCard matchup={preview.data} /> : null;
 }
 
@@ -218,14 +230,14 @@ function Live({ game, canAct, onChange, onConflict }: { game: Game; canAct: bool
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,34rem)_1fr]">
       <div className="flex flex-col gap-2">
-        <p className="flex justify-between text-sm"><span className="font-semibold">{top.displayName}</span><span className="text-slate">{orientation === 'white' ? captured.byBlack.join(' ') : captured.byWhite.join(' ')}</span></p>
+        <p className="flex items-center justify-between gap-2 text-sm"><span className="font-semibold">{top.displayName}</span><span className="text-slate">{orientation === 'white' ? captured.byBlack.join(' ') : captured.byWhite.join(' ')}</span><PlayerClock clock={game.clock} side={orientation === 'white' ? 'BLACK' : 'WHITE'} /></p>
         <div className="flex gap-2">
           {showEval && <EvalBar score={evaluation?.score ?? null} orientation={orientation} />}
           <div className="flex-1">
             <Board fen={fen} orientation={orientation} lastMoveUci={last?.uci} arrows={arrows} onMove={canAct ? onMove : undefined} id={`live-${game.id}`} />
           </div>
         </div>
-        <p className="flex justify-between text-sm"><span className="font-semibold">{bottom.displayName}</span><span className="text-slate">{orientation === 'white' ? captured.byWhite.join(' ') : captured.byBlack.join(' ')}</span></p>
+        <p className="flex items-center justify-between gap-2 text-sm"><span className="font-semibold">{bottom.displayName}</span><span className="text-slate">{orientation === 'white' ? captured.byWhite.join(' ') : captured.byBlack.join(' ')}</span><PlayerClock clock={game.clock} side={orientation === 'white' ? 'WHITE' : 'BLACK'} /></p>
         {promotion && (
           <div role="dialog" aria-label="Velg brikke" className="flex items-center gap-2 rounded-md bg-spruce p-3 text-snow">
             <span className="mr-2 text-sm">Forvandle til</span>
@@ -239,6 +251,11 @@ function Live({ game, canAct, onChange, onConflict }: { game: Game; canAct: bool
         <div className="mt-2 flex flex-wrap gap-2">
           <Button variant="quiet" onClick={() => setOrientation(orientation === 'white' ? 'black' : 'white')}>Snu brettet</Button>
           <Button variant="quiet" onClick={() => setShowEval(!showEval)}>{showEval ? 'Skjul Stockfish' : 'Vis Stockfish'}</Button>
+          {canAct && game.timeControl && (
+            <Link to={`/matches/${game.id}/klokke`} className="inline-flex items-center rounded-md bg-spruce px-4 py-2 font-semibold text-snow hover:bg-spruce-2">
+              Åpne sjakkur
+            </Link>
+          )}
         </div>
       </div>
       <div className="flex flex-col gap-6">
@@ -408,6 +425,7 @@ function Recap({ game, canSave }: { game: Game; canSave: boolean }) {
       </div>
       <div className="flex flex-col gap-6">
         <MoveList game={game} analysis={analysis} current={ply} onSelect={setPly} />
+        {analysis && error && <ErrorNotice error={error} />}
         {analysis ? (
           <AnalysisSummaryView game={game} analysis={analysis} onSelect={setPly} />
         ) : (

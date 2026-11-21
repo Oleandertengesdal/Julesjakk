@@ -54,11 +54,13 @@ public class GameController {
     private final GameService gameService;
     private final AnalysisService analysisService;
     private final RequestGuards guards;
+    private final ChessClockService clockService;
 
-    public GameController(GameService gameService, AnalysisService analysisService, RequestGuards guards) {
+    public GameController(GameService gameService, AnalysisService analysisService, RequestGuards guards, ChessClockService clockService) {
         this.gameService = gameService;
         this.analysisService = analysisService;
         this.guards = guards;
+        this.clockService = clockService;
     }
 
     /**
@@ -174,6 +176,36 @@ public class GameController {
     @PostMapping("/api/admin/games/{id}/feature")
     GameView feature(@PathVariable long id, @Valid @RequestBody FeatureRequest body, @AuthenticationPrincipal CurrentUser user) {
         return gameService.feature(user, id, body.featured());
+    }
+
+    record ClockRequest(@NotNull @jakarta.validation.constraints.Min(0) @jakarta.validation.constraints.Max(86_400_000) Long whiteMs,
+                        @NotNull @jakarta.validation.constraints.Min(0) @jakarta.validation.constraints.Max(86_400_000) Long blackMs,
+                        ChessClockService.Side running,
+                        @NotNull @jakarta.validation.constraints.Min(0) Integer sequence) {
+    }
+
+    /** The phone running the chess clock reports its state; not rate-limited like submissions, it is pressed every move. */
+    @PutMapping("/api/games/{id}/clock")
+    GameView.Clock clock(@PathVariable long id, @Valid @RequestBody ClockRequest body, @AuthenticationPrincipal CurrentUser user) {
+        return clockService.update(user, id, new ChessClockService.Snapshot(body.whiteMs(), body.blackMs(), body.running(), body.sequence()));
+    }
+
+    record CorrectRequest(@NotNull GameResult result, Termination termination, @Size(max = 10_000) String reason) {
+    }
+
+    record AnnulRequest(@Size(max = 10_000) String reason) {
+    }
+
+    /** Admin only (by URL): changes a confirmed result and replays the category's ratings. */
+    @PostMapping("/api/admin/games/{id}/correct")
+    GameView correct(@PathVariable long id, @Valid @RequestBody CorrectRequest body, @AuthenticationPrincipal CurrentUser user) {
+        return gameService.correct(user, id, body.result(), body.termination(), body.reason());
+    }
+
+    /** Admin only (by URL): takes a confirmed game out of ratings, standings and statistics. */
+    @PostMapping("/api/admin/games/{id}/annul")
+    GameView annul(@PathVariable long id, @Valid @RequestBody AnnulRequest body, @AuthenticationPrincipal CurrentUser user) {
+        return gameService.annul(user, id, body.reason());
     }
 
     @PostMapping("/api/games/{id}/abort")

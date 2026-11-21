@@ -85,6 +85,9 @@ public class GameService {
     }
 
     private void changed(Game game) {
+        if (game.status != GameStatus.LIVE) {
+            stopClock(game.id);
+        }
         events.publishEvent(new GameChangedEvent(game.id));
     }
 
@@ -464,6 +467,88 @@ public class GameService {
     }
 
     // ------------------------------------------------------------------------------------------
+    // Admin corrections
+    // ------------------------------------------------------------------------------------------
+
+    /**
+     * Changes the result of a confirmed game and replays every rating in its category, so the
+     * outcome is exactly as if the right result had been registered in the first place.
+     */
+    @Transactional
+    public GameView correct(CurrentUser admin, long gameId, GameResult result, Termination termination, String rawReason) {
+        String reason = correctionReason(rawReason);
+        Game game = lockConfirmed(admin, gameId);
+        // A game whose moves end in mate or stalemate has only one possible result.
+        replay(game).flatMap(ParsedGame::boardOutcome).filter(outcome -> outcome != result).ifPresent(outcome -> {
+            throw new ChessException(ErrorCode.PGN_RESULT_MISMATCH, "Trekkene i partiet ender med et annet resultat.");
+        });
+        events.publishEvent(new GameCorrectedEvent(game, result));
+        GameResult before = game.result;
+        game.result = result;
+        if (termination != null) {
+            game.termination = termination;
+        }
+        markCorrected(game, admin, reason);
+        auditLog.record(admin.id(), "GAME_CORRECTED", "game:" + game.id, before + " -> " + result + ": " + reason);
+        return view(game);
+    }
+
+    /** Takes a confirmed game out of ratings, standings and statistics, keeping it visible as annulled. */
+    @Transactional
+    public GameView annul(CurrentUser admin, long gameId, String rawReason) {
+        String reason = correctionReason(rawReason);
+        Game game = lockConfirmed(admin, gameId);
+        events.publishEvent(new GameCorrectedEvent(game, null));
+        game.status = GameStatus.ANNULLED;
+        game.featured = false;
+        // Only a confirmed game may carry rating changes; the replay below rates everything else again.
+        game.whiteRatingBefore = null;
+        game.whiteRatingDelta = null;
+        game.blackRatingBefore = null;
+        game.blackRatingDelta = null;
+        markCorrected(game, admin, reason);
+        auditLog.record(admin.id(), "GAME_ANNULLED", "game:" + game.id, game.result + ": " + reason);
+        return view(game);
+    }
+
+    private static String correctionReason(String raw) {
+        String reason = Sanitizer.plainText(raw == null ? "" : raw, 1000);
+        if (reason.isBlank() || reason.length() > 300) {
+            throw new ChessException(ErrorCode.VALIDATION_FAILED, "Skriv en kort begrunnelse (høyst 300 tegn).");
+        }
+        return reason;
+    }
+
+    private Game lockConfirmed(CurrentUser admin, long gameId) {
+        Game game = lockForChange(admin, gameId);
+        if (game.status != GameStatus.FINISHED) {
+            throw new ChessException(ErrorCode.GAME_INVALID_STATE, "Bare bekreftede partier kan rettes.");
+        }
+        return game;
+    }
+
+    private void markCorrected(Game game, CurrentUser admin, String reason) {
+        game.correctedBy = admin.id();
+        game.correctedAt = java.time.Instant.now();
+        game.correctionReason = reason;
+        games.saveAndFlush(game);
+        if (game.rated) {
+            ratingService.recompute(game.category);
+            // the replay wrote the rating columns with SQL; reload them into the entity for the view
+            games.flush();
+            jdbc.sql("SELECT white_rating_before, white_rating_delta, black_rating_before, black_rating_delta FROM game WHERE id = ?")
+                    .param(game.id).query((rs, row) -> {
+                        game.whiteRatingBefore = (Integer) rs.getObject(1);
+                        game.whiteRatingDelta = (Integer) rs.getObject(2);
+                        game.blackRatingBefore = (Integer) rs.getObject(3);
+                        game.blackRatingDelta = (Integer) rs.getObject(4);
+                        return null;
+                    }).list();
+        }
+        changed(game);
+    }
+
+    // ------------------------------------------------------------------------------------------
     // Reading
     // ------------------------------------------------------------------------------------------
 
@@ -522,6 +607,9 @@ public class GameService {
         if (game.confirmedBy != null) {
             ids.add(game.confirmedBy);
         }
+        if (game.correctedBy != null) {
+            ids.add(game.correctedBy);
+        }
         jdbc.sql("SELECT id, username, display_name FROM app_user WHERE id IN (:ids)").param("ids", ids)
                 .query((rs, row) -> players.put(rs.getLong(1), new GameView.Player(rs.getLong(1), rs.getString(2), rs.getString(3))))
                 .list();
@@ -535,6 +623,29 @@ public class GameService {
                 game.registeredBy == null ? null : players.get(game.registeredBy),
                 game.confirmedBy == null ? null : players.get(game.confirmedBy), game.rejectionReason, game.plyCount,
                 game.currentFen, game.comment, game.playedAt, game.whiteRatingBefore, game.whiteRatingDelta,
-                game.blackRatingBefore, game.blackRatingDelta, game.pgn, moves);
+                game.blackRatingBefore, game.blackRatingDelta, game.pgn, moves,
+                game.correctedAt == null ? null : new GameView.Correction(game.correctionReason, players.get(game.correctedBy), game.correctedAt),
+                clock(game.id));
+    }
+
+    /** A game that is no longer live has its clock stopped where it stands (see ChessClockService). */
+    private void stopClock(long gameId) {
+        jdbc.sql("""
+                        UPDATE game_clock SET
+                            white_ms = CASE WHEN running = 'WHITE'
+                                THEN greatest(0, white_ms - (extract(epoch FROM now() - updated_at) * 1000)::int) ELSE white_ms END,
+                            black_ms = CASE WHEN running = 'BLACK'
+                                THEN greatest(0, black_ms - (extract(epoch FROM now() - updated_at) * 1000)::int) ELSE black_ms END,
+                            running = NULL, updated_at = now()
+                        WHERE game_id = ? AND running IS NOT NULL""").param(gameId).update();
+    }
+
+    private GameView.Clock clock(long gameId) {
+        return jdbc.sql("""
+                        SELECT initial_ms, increment_ms, white_ms, black_ms, running, sequence, updated_at, now() AS server_now
+                        FROM game_clock WHERE game_id = ?""").param(gameId)
+                .query((rs, row) -> new GameView.Clock(rs.getLong(1), rs.getLong(2), rs.getLong(3), rs.getLong(4), rs.getString(5),
+                        rs.getInt(6), rs.getTimestamp(7).toInstant(), java.time.Instant.now()))
+                .optional().orElse(null);
     }
 }

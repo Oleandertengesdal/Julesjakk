@@ -26,6 +26,7 @@ export default function NewGamePage() {
   const [pgn, setPgn] = useState('');
   const [comment, setComment] = useState('');
   const [rated, setRated] = useState(true);
+  const [withClock, setWithClock] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
   // One key per form: a double-tap on "Registrer" creates one game, not two.
@@ -45,7 +46,7 @@ export default function NewGamePage() {
       const common = { whiteId: white, blackId: black, rated, category: effectiveCategory, timeControl: timeControl.trim() || undefined };
       if (mode === 'live') {
         const game = await api.post<Game>('/api/games/live', common);
-        navigate(`/matches/${game.id}`);
+        navigate(withClock && derived ? `/matches/${game.id}/klokke` : `/matches/${game.id}`);
         return;
       }
       const game = await api.post<Game>('/api/games', {
@@ -78,7 +79,7 @@ export default function NewGamePage() {
       <p className="mt-3 text-slate">
         {mode === 'result' && 'Raskest etter et parti ved brettet.'}
         {mode === 'pgn' && 'Trekkene kontrolleres, og partiet kan analyseres med Stockfish etterpå.'}
-        {mode === 'live' && 'Før inn trekkene mens dere spiller. Tilskuere og TV-skjermen følger med.'}
+        {mode === 'live' && 'Spill med sjakkur på telefonen, og før gjerne inn trekkene underveis. Tilskuere og TV-skjermen følger med.'}
       </p>
 
       <form onSubmit={submit} className="mt-6 flex flex-col gap-5" noValidate>
@@ -132,6 +133,13 @@ export default function NewGamePage() {
           <input type="checkbox" checked={rated} onChange={(e) => setRated(e.target.checked)} className="h-4 w-4 accent-spruce" />
           Ratet parti
         </label>
+
+        {mode === 'live' && derived && (
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={withClock} onChange={(e) => setWithClock(e.target.checked)} className="h-4 w-4 accent-spruce" />
+            Bruk denne telefonen som sjakkur
+          </label>
+        )}
 
         {!isAdmin && mode !== 'live' && <p className="text-sm text-slate">Motstanderen må bekrefte resultatet før det teller.</p>}
         <ErrorNotice error={error} />

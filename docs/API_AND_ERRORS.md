@@ -26,6 +26,7 @@ only client, but everything here is usable with `curl`.
 - **Times** are ISO-8601 UTC (`2026-12-24T18:00:00Z`).
 - **Enumerations**:
   - results: `WHITE_WIN`, `BLACK_WIN`, `DRAW`;
+  - game statuses: `SCHEDULED`, `LIVE`, `PENDING`, `REJECTED`, `FINISHED`, `ABORTED`, `ANNULLED`;
   - categories: `BLITZ`, `RAPID`, `CLASSICAL`;
   - terminations: `CHECKMATE`, `RESIGNATION`, `TIMEOUT`, `STALEMATE`, `THREEFOLD_REPETITION`, `FIFTY_MOVE_RULE`, `INSUFFICIENT_MATERIAL`, `AGREEMENT`, `FORFEIT`, `UNKNOWN`.
 - **Time controls** are written `minutes+increment` (`5+3`, `15+10`, `90+30`) or just `minutes`.
@@ -88,6 +89,7 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 | POST | `/api/games/live` | Player (one of the players) or Admin | `whiteId`, `blackId`, `rated`, `category`, `timeControl` | Starts move-by-move entry (LIVE) |
 | POST | `/api/games/{id}/moves` | Participant | `move` (SAN `Nf3` or UCI `g1f3`), `expectedPly` | Validated server-side; mate or stalemate ends the game |
 | POST | `/api/games/{id}/finish` | Participant | `result`, `termination` | LIVE → PENDING (player) or FINISHED (admin) |
+| PUT | `/api/games/{id}/clock` | Participant | `whiteMs`, `blackMs` (0–86 400 000), `running` (`WHITE`, `BLACK` or null), `sequence` | The phone running the chess clock reports its state on every press. LIVE games with a time control only (`CHESS-GAME-003`, `CHESS-GAME-009`). A sequence not newer than the stored one is refused (`CHESS-GAME-005`). Returns the clock; viewers get it in the game view |
 | POST | `/api/games/{id}/abort` | Participant | | LIVE → ABORTED, unrated |
 | POST | `/api/games/{id}/start` | Participant | | SCHEDULED tournament game → LIVE |
 | POST | `/api/games/{id}/report` | Participant | `result`, optional `pgn`, `termination` | Result for a SCHEDULED tournament game |
@@ -123,6 +125,8 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 | POST | `/api/admin/users/{id}/password-reset` | `mode`: `TEMPORARY_PASSWORD` (returns a one-off password; user must change it) or `RESET_LINK` (returns a single-use token valid for 24 hours; the admin page turns it into a `/reset-password?token=…` link) |
 | POST | `/api/admin/players` | `username`, `displayName`. A managed player without login, for children |
 | GET | `/api/admin/games/pending` | Every unconfirmed game |
+| POST | `/api/admin/games/{id}/correct` | `result`, optional `termination`, `reason` (required, ≤ 300). Changes a FINISHED game's result and replays every rating in its category (see [ARCHITECTURE.md](ARCHITECTURE.md#result-corrections)). Refused for knockout games (`CHESS-GAME-010`) and when the moves prove another result (`CHESS-PGN-004`) |
+| POST | `/api/admin/games/{id}/annul` | `reason` (required). FINISHED → ANNULLED: out of ratings, standings and statistics, still visible with the reason. Refused for knockout and paired round-robin/Swiss games (`CHESS-GAME-010`) |
 | POST | `/api/admin/games/{id}/feature` | `featured`: show this game on TV |
 | GET | `/api/admin/diagnostics/request` | How the server sees this request: connection address, forwarding headers, the address used for rate limits |
 
@@ -141,7 +145,7 @@ CONNECT frame header: `Authorization: Bearer <token>`. The handshake is accepted
 
 | Topic | Payload | Sent when |
 |-------|---------|-----------|
-| `/topic/games/{id}` | The full game view (same as `GET /api/games/{id}`) | Any change to that game: move, finish, confirmation, rejection, abort, featuring |
+| `/topic/games/{id}` | The full game view (same as `GET /api/games/{id}`) | Any change to that game: move, clock press, finish, confirmation, rejection, abort, featuring, correction |
 | `/topic/tv` | The TV view (same as `GET /api/tv`) | The game TV should show changes, or that game changes |
 | `/topic/tournaments/{id}` | The tournament view | Results, new rounds, bracket progress |
 
@@ -240,6 +244,7 @@ All server-side codes, generated from
 | `CHESS-GAME-007` | 403 | Only participants or admins may modify a game | Bare spillerne i partiet eller en administrator kan gjøre dette. | Only the two players or an admin may change a game. |
 | `CHESS-GAME-008` | 403 | The player who registered a result cannot confirm it | Motstanderen din eller en administrator må bekrefte partiet. | The player who registered the result cannot confirm it; the opponent or an admin must. |
 | `CHESS-GAME-009` | 422 | Time control invalid or inconsistent with the category | Tidskontrollen er ugyldig eller passer ikke med valgt kategori. | Time control must look like `5+3`, `15+10` or `10` (minutes ≤ 600, increment ≤ 180), and agree with the chosen category. |
+| `CHESS-GAME-010` | 409 | This result cannot be corrected | Resultatet kan ikke endres her: det avgjorde en utslagskamp, eller partiet hører til en turneringsrunde. | Knockout results that decided a match cannot change, because the bracket has moved on. Paired round-robin and Swiss games can be corrected but not annulled. If a knockout result really was wrong, cancel the tournament and start a new one. |
 
 ### Analysis
 
